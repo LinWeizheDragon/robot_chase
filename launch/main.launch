@@ -6,7 +6,7 @@
    args="$(find turtlebot3_gazebo)/worlds/empty_wall.world" respawn="false" output="screen" /> -->
    <arg name="use_gui" default="true"/>
    <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find multi_robot)/worlds/simple.world"/>
+    <arg name="world_name" value="$(find robot_chase)/worlds/simple.world"/>
     <arg name="paused" value="true"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="$(arg use_gui)"/>
@@ -18,5 +18,5 @@
   <!--<node name="gazebo_gui" pkg="gazebo" type="gui" respawn="false" output="screen"/> -->
 
   <!-- include our robots -->
-  <include file="$(find multi_robot)/launch/robots.launch"/>
+  <include file="$(find robot_chase)/launch/robots.launch"/>
 </launch>
