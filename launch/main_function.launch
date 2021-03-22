@@ -1,0 +1,5 @@
+<launch>
+	<arg name="mode" />
+
+	<node pkg="robot_chase" type="main_function.py" name="main_function" args="--mode=$(arg mode)" output="screen"></node>
+</launch>

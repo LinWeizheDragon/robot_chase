@@ -119,7 +119,9 @@ class GroundtruthPose(object):
     self._name = name
 
   def callback(self, msg):
+    print(msg)
     idx = [i for i, n in enumerate(msg.name) if n[:-1] == self._name]
+    print(msg.name)
     if not idx:
       raise ValueError('Specified name "{}" does not exist.'.format(self._name))
     for i in idx:
