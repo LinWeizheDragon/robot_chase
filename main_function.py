@@ -63,8 +63,19 @@ def run(config):
             rate_limiter.sleep()
             continue
 
-        for robot in robot_intances:
+        for i, robot in enumerate(robot_intances):
+            
+            if robot.type == "police":
+                for arrested_baddy in robot.captured:
+                    for r in config.robots:
+                        if arrested_baddy == robot.name:
+                            r.free = False
+            else:
+                if config.robots[i].free == False:
+                    robot.stop()
+                    continue
             robot.action()
+
             # print(robot.get_current_position())
 
 
@@ -83,7 +94,7 @@ if __name__ == '__main__':
                 'name': 'robot1',
                 'type': 'police',
                 'epsilon': 0.2,
-                'max_speed': 0.6,
+                'max_speed': 0.3,
             },
             {
                 'name': 'robot2',
@@ -95,13 +106,15 @@ if __name__ == '__main__':
                 'name': 'robot3',
                 'type': 'baddy',
                 'epsilon': 0.2,
-                'max_speed': 0.5,
+                'max_speed': 0.9,
+                'free': True
             },
             {
                 'name': 'robot4',
                 'type': 'baddy',
                 'epsilon': 0.2,
-                'max_speed': 0.5,
+                'max_speed': 0.9,
+                'free': True
             },
         ],
         'obstacles': [

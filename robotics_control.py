@@ -11,7 +11,8 @@ YAW = 2
 
 ROBOT_RADIUS = 0.105 / 2.
 GOAL_POSITION = np.array([-0.5, -0.5], dtype=np.float32)
-
+SECURITY_DISTANCE = 2
+CAPTURE_DISTANCE = 0.5
 class RobotAbstract():
     def __init__(self, publisher, global_config, config, sensor, positioning):
         self.sensor = sensor
@@ -21,6 +22,7 @@ class RobotAbstract():
         self.positioning = positioning
         self.global_config = global_config
         self.config = config
+
 
     def action(self):
         # First process measurements and observations
@@ -55,6 +57,13 @@ class RobotAbstract():
         self.publisher.publish(vel_msg)
         # print('robot', self.name, 'actioned')
 
+    def stop(self):
+      u, w = 0, 0
+      vel_msg = Twist()
+      vel_msg.linear.x = u
+      vel_msg.angular.z = w
+      self.publisher.publish(vel_msg)
+
     def controller(self, *args, **kwargs):
         raise NotImplementedError('No Controller is specified!')
 
@@ -64,6 +73,7 @@ class RobotAbstract():
 class Police(RobotAbstract):
     def __init__(self, publisher, global_config, config, sensor, positioning):
         RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
+        self.captured = []
 
     def controller(self, *args, **kwargs):
         # u, w = braitenberg(*args)
@@ -83,7 +93,7 @@ class Police(RobotAbstract):
         # Police get potential field
         # Baddies are targets
 
-        baddy_names = [robot.name for robot in self.global_config.robots if robot.type == 'baddy']
+        baddy_names = [robot.name for robot in self.global_config.robots if robot.type == 'baddy' and robot.free]
         police_names = [robot.name for robot in self.global_config.robots if robot.type == 'police']
         baddies = {}
         police = {}
@@ -93,16 +103,28 @@ class Police(RobotAbstract):
             elif obj_name in police_names:
                 police[obj_name] = obj
 
-        combined_v = None
+        #combined_v = None
+        goal_position = None
+        dmin = float("inf")
         for baddy_name, baddy_data in baddies.items():
-            # print('baddy', baddy_name)
-            v_baddy = get_velocity_to_reach_goal(point_position, baddy_data.data[:2],
+          if get_distance(point_position, baddy_data.data[:2])<dmin:
+            dmin = get_distance(point_position, baddy_data.data[:2])
+            if dmin <= CAPTURE_DISTANCE:
+              self.captured.append(baddy_name)
+              #print(baddy_name, " arrested!")
+              continue
+            goal_position = baddy_data.data[:2]
+        if goal_position is None:
+          #print("All baddies arrested")
+          v_police = np.zeros(2)
+        else:
+          v_police = get_velocity_to_reach_goal(point_position, goal_position,
                                             max_speed=self.config.max_speed)
-            # print(v_baddy)
-            if combined_v is None:
-                combined_v = v_baddy.copy()
-            else:
-                combined_v += v_baddy
+
+            #if combined_v is None:
+             #   combined_v = v_baddy.copy()
+            #else:
+             #   combined_v += v_baddy
 
         # v_avoid = get_velocity_to_avoid_obstacles(point_position,
         #                                           [obs.data.position for obs in observations.values() if
@@ -111,12 +133,13 @@ class Police(RobotAbstract):
         #                                            obs.type == 'cylinder'],
         #                                           max_speed=self.config.max_speed)
         # combined_v += v_avoid
-        combined_v = cap(combined_v, max_speed=self.config.max_speed)
+        combined_v = cap(v_police, max_speed=self.config.max_speed)
         return combined_v
 
 class Baddy(RobotAbstract):
     def __init__(self, publisher, global_config, config, sensor, positioning):
         RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
+        self.free = config.free
 
     def controller(self, *args, **kwargs):
         m = kwargs['measurements']
@@ -142,7 +165,7 @@ class Baddy(RobotAbstract):
                 police[obj_name] = obj
 
         combined_v = None
-        for police_name, police_data in baddies.items():
+        for police_name, police_data in police.items():
             # print('baddy', baddy_name)
             v_police = get_velocity_to_avoid_obstacles(point_position,
                                                       [police_data.data[:2]],
@@ -243,12 +266,11 @@ def get_velocity_to_avoid_obstacles(position,
     obstacle_radius = obstacle_radii[i]
     to_obs_distance = get_distance(position, obstacle_position)
     unit_direction = (position - obstacle_position) / to_obs_distance
-
     # Compute the decay factor in the range of [0, 1]
-    decay_factor = np.exp(-np.abs((to_obs_distance - obstacle_radius)) * scale_factor)
+    decay_factor = np.exp(-np.abs((to_obs_distance - obstacle_radius - SECURITY_DISTANCE)) * scale_factor)
 
     # Assign amplitude
-    if to_obs_distance <= obstacle_radius:
+    if to_obs_distance <= obstacle_radius + SECURITY_DISTANCE:
       amplitude = max_speed
     else:
       amplitude = decay_factor * max_speed
