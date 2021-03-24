@@ -62,14 +62,11 @@ def run(config):
         if not all([robot.positioning.ready for robot in robot_intances]):
             rate_limiter.sleep()
             continue
-
-        for i, robot in enumerate(robot_intances):
-            
+        captured = set()
+        for i, robot in enumerate(robot_intances):    
             if robot.type == "police":
-                for arrested_baddy in robot.captured:
-                    for r in config.robots:
-                        if arrested_baddy == robot.name:
-                            r.free = False
+                captured.union(robot.captured)
+                robot.add_capture(captured)
             else:
                 if config.robots[i].free == False:
                     robot.stop()

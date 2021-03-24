@@ -73,7 +73,10 @@ class RobotAbstract():
 class Police(RobotAbstract):
     def __init__(self, publisher, global_config, config, sensor, positioning):
         RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
-        self.captured = []
+        self.captured = set()
+
+    def add_capture(self, captured):
+        self.captured.union( captured )
 
     def controller(self, *args, **kwargs):
         # u, w = braitenberg(*args)
@@ -93,7 +96,7 @@ class Police(RobotAbstract):
         # Police get potential field
         # Baddies are targets
 
-        baddy_names = [robot.name for robot in self.global_config.robots if robot.type == 'baddy' and robot.free]
+        baddy_names = [robot.name for robot in self.global_config.robots if (robot.type == 'baddy' and robot.name not in self.captured)]
         police_names = [robot.name for robot in self.global_config.robots if robot.type == 'police']
         baddies = {}
         police = {}
@@ -110,12 +113,12 @@ class Police(RobotAbstract):
           if get_distance(point_position, baddy_data.data[:2])<dmin:
             dmin = get_distance(point_position, baddy_data.data[:2])
             if dmin <= CAPTURE_DISTANCE:
-              self.captured.append(baddy_name)
+              self.captured.add(baddy_name)
               #print(baddy_name, " arrested!")
               continue
             goal_position = baddy_data.data[:2]
         if goal_position is None:
-          #print("All baddies arrested")
+          print("All baddies arrested")
           v_police = np.zeros(2)
         else:
           v_police = get_velocity_to_reach_goal(point_position, goal_position,
