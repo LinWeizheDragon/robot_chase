@@ -5,16 +5,14 @@ from geometry_msgs.msg import Twist
 import numpy as np
 from easydict import EasyDict
 
-X = 0
-Y = 1
-YAW = 2
+from constant import *
 
-ROBOT_RADIUS = 0.105 / 2.
-GOAL_POSITION = np.array([-0.5, -0.5], dtype=np.float32)
-SECURITY_DISTANCE = 2
-CAPTURE_DISTANCE = 0.5
 class RobotAbstract():
-    def __init__(self, publisher, global_config, config, sensor, positioning):
+    def __init__(self, publisher,
+                 global_config,
+                 config,
+                 sensor,
+                 positioning):
         self.sensor = sensor
         self.publisher = publisher
         self.type = config.type
@@ -22,9 +20,24 @@ class RobotAbstract():
         self.positioning = positioning
         self.global_config = global_config
         self.config = config
+        self.terminate = False
 
+    def set_instance_dict(self, instance_dict):
+        self.instance_dict = instance_dict
+
+    def get_instance_by_name(self, name):
+        return self.instance_dict.get(name, None)
 
     def action(self):
+
+        if self.terminate:
+            u, w = 0, 0
+            vel_msg = Twist()
+            vel_msg.linear.x = u
+            vel_msg.angular.z = w
+            self.publisher.publish(vel_msg)
+            return
+
         # First process measurements and observations
         groundtruth = self.positioning
         EPSILON = self.config.epsilon
@@ -55,28 +68,35 @@ class RobotAbstract():
         vel_msg.linear.x = u
         vel_msg.angular.z = w
         self.publisher.publish(vel_msg)
-        # print('robot', self.name, 'actioned')
+        # print('robot', self.name, 'actioned', u, w)
 
     def stop(self):
-      u, w = 0, 0
-      vel_msg = Twist()
-      vel_msg.linear.x = u
-      vel_msg.angular.z = w
-      self.publisher.publish(vel_msg)
+        self.terminate = True
+        print('Robot', self.name, 'is terminated!')
 
     def controller(self, *args, **kwargs):
         raise NotImplementedError('No Controller is specified!')
 
-    def get_current_position(self):
+    @property
+    def current_position(self):
         return self.positioning.pose
 
 class Police(RobotAbstract):
     def __init__(self, publisher, global_config, config, sensor, positioning):
         RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
         self.captured = set()
+        self.current_target = None
+
+    def set_target(self, target_name):
+        # Change chasing target
+        self.current_target = target_name
+
+    def get_current_target(self):
+        return self.current_target
 
     def add_capture(self, captured):
-        self.captured.union( captured )
+        print(self.name, 'captures', captured, 'at', self.current_position)
+        self.captured.union(captured)
 
     def controller(self, *args, **kwargs):
         # u, w = braitenberg(*args)
@@ -106,28 +126,38 @@ class Police(RobotAbstract):
             elif obj_name in police_names:
                 police[obj_name] = obj
 
-        #combined_v = None
-        goal_position = None
-        dmin = float("inf")
-        for baddy_name, baddy_data in baddies.items():
-          if get_distance(point_position, baddy_data.data[:2])<dmin:
-            dmin = get_distance(point_position, baddy_data.data[:2])
-            if dmin <= CAPTURE_DISTANCE:
-              self.captured.add(baddy_name)
-              #print(baddy_name, " arrested!")
-              continue
-            goal_position = baddy_data.data[:2]
-        if goal_position is None:
-          print("All baddies arrested")
-          v_police = np.zeros(2)
-        else:
-          v_police = get_velocity_to_reach_goal(point_position, goal_position,
-                                            max_speed=self.config.max_speed)
+        combined_v = np.zeros(2, dtype=np.float32)
 
-            #if combined_v is None:
-             #   combined_v = v_baddy.copy()
-            #else:
-             #   combined_v += v_baddy
+        # avoid hitting other police
+        for police_name, police_data in police.items():
+            combined_v += get_velocity_to_avoid_obstacles(point_position,
+                                                            [police_data.data[:2]],
+                                                            [ROBOT_RADIUS + ROBOT_RADIUS],
+                                                            max_speed=self.config.max_speed,
+                                                            scale_factor=10)
+
+        # avoid hitting other captured baddies
+        for baddy_name, baddy_data in baddies.items():
+            if self.get_instance_by_name(baddy_name).free:
+                continue
+            combined_v += get_velocity_to_avoid_obstacles(point_position,
+                                                            [baddy_data.data[:2]],
+                                                            [ROBOT_RADIUS + ROBOT_RADIUS],
+                                                            max_speed=self.config.max_speed,
+                                                            scale_factor=10)
+
+        # If has a target baddy
+        if self.current_target is not None:
+            goal_position = baddies[self.current_target].data[:2]
+            v_chase_baddy = get_velocity_to_reach_goal(point_position, goal_position,
+                                            max_speed=self.config.max_speed)
+            combined_v += v_chase_baddy
+
+        # Avoid hitting walls
+        for obstacle in self.global_config.obstacles:
+            if obstacle.params.type == 'square_wall':
+                v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
+                combined_v += v_avoid
 
         # v_avoid = get_velocity_to_avoid_obstacles(point_position,
         #                                           [obs.data.position for obs in observations.values() if
@@ -136,13 +166,20 @@ class Police(RobotAbstract):
         #                                            obs.type == 'cylinder'],
         #                                           max_speed=self.config.max_speed)
         # combined_v += v_avoid
-        combined_v = cap(v_police, max_speed=self.config.max_speed)
+
+        combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
 
 class Baddy(RobotAbstract):
     def __init__(self, publisher, global_config, config, sensor, positioning):
         RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
-        self.free = config.free
+        self.free = True
+        self.capture_by = set()
+
+    def get_captured_by(self, capture_by):
+        self.capture_by.union(capture_by)
+        self.free = False
+        self.stop()
 
     def controller(self, *args, **kwargs):
         m = kwargs['measurements']
@@ -167,19 +204,31 @@ class Baddy(RobotAbstract):
             elif obj_name in police_names:
                 police[obj_name] = obj
 
-        combined_v = None
+        combined_v = np.zeros(2, dtype=np.float32)
+
+        # avoid hitting other baddies
+        for baddy_name, baddy_data in baddies.items():
+            combined_v += get_velocity_to_avoid_obstacles(point_position,
+                                                          [baddy_data.data[:2]],
+                                                          [ROBOT_RADIUS + ROBOT_RADIUS],
+                                                          max_speed=self.config.max_speed,
+                                                          scale_factor=10)
+
+        # escape from the police
         for police_name, police_data in police.items():
-            # print('baddy', baddy_name)
-            v_police = get_velocity_to_avoid_obstacles(point_position,
+            v_escape = get_velocity_to_avoid_obstacles(point_position,
                                                       [police_data.data[:2]],
                                                       [ROBOT_RADIUS],
                                             max_speed=self.config.max_speed,
                                                       scale_factor=5)
-            # print(v_baddy)
-            if combined_v is None:
-                combined_v = v_police.copy()
-            else:
-                combined_v += v_police
+            combined_v += v_escape
+
+        # Avoid hitting walls
+        for obstacle in self.global_config.obstacles:
+            if obstacle.params.type == 'square_wall':
+                v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
+                combined_v += v_avoid
+
 
         # v_avoid = get_velocity_to_avoid_obstacles(point_position,
         #                                           [obs.data.position for obs in observations.values() if
@@ -281,6 +330,52 @@ def get_velocity_to_avoid_obstacles(position,
     v += unit_direction * amplitude
 
   return v
+
+def get_velocity_to_avoid_walls(position, wall_config, max_speed,
+                                scale_factor=0.05):
+    # This function returns velocity to avoid hitting walls
+    wall_data = wall_config.params
+    v = np.zeros(2, dtype=np.float32)
+    if wall_data.type == 'square_wall':
+        def compute_velocity(distance, direction):
+            # Compute the decay factor in the range of [0, 1]
+            decay_factor = np.exp(-distance * scale_factor)
+            # Assign amplitude
+            amplitude = decay_factor * max_speed
+            return direction * amplitude
+
+        left_x = wall_data.position[X]
+        right_x = wall_data.position[X] + wall_data.dx
+        bottom_y = wall_data.position[Y]
+        top_y = wall_data.position[Y] + wall_data.dy
+
+        to_wall_distance = abs(position[X] - left_x)
+        sign = (position[X]-left_x) / to_wall_distance
+        to_wall_direction = sign * np.array([1, 0], dtype=np.float32) * max_speed
+        v += compute_velocity(to_wall_distance, to_wall_direction)
+        # print('left adding', compute_velocity(to_wall_distance, to_wall_direction))
+
+        to_wall_distance = abs(position[X] - right_x)
+        sign = (position[X] - right_x) / to_wall_distance
+        to_wall_direction = sign * np.array([1, 0], dtype=np.float32) * max_speed
+        v += compute_velocity(to_wall_distance, to_wall_direction)
+        # print('right adding', compute_velocity(to_wall_distance, to_wall_direction))
+
+        to_wall_distance = abs(position[Y] - bottom_y)
+        sign = (position[Y] - bottom_y) / to_wall_distance
+        to_wall_direction = sign * np.array([0, 1], dtype=np.float32) * max_speed
+        v += compute_velocity(to_wall_distance, to_wall_direction)
+        # print('bottom adding', compute_velocity(to_wall_distance, to_wall_direction))
+
+        to_wall_distance = abs(position[Y] - top_y)
+        sign = (position[Y] - top_y) / to_wall_distance
+        to_wall_direction = sign * np.array([0, 1], dtype=np.float32) * max_speed
+        v += compute_velocity(to_wall_distance, to_wall_direction)
+        # print('up adding', compute_velocity(to_wall_distance, to_wall_direction))
+
+    # print(position, v)
+
+    return cap(v, max_speed=max_speed)
 
 
 def normalize(v):

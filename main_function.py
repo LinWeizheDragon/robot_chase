@@ -23,7 +23,8 @@ from gazebo_msgs.msg import ModelStates
 from tf.transformations import euler_from_quaternion
 
 from laser_scanner import SimpleLaser
-from robotics_control import Police, Baddy
+from robotics_control import Police, Baddy, get_distance, get_unit_vector
+from constant import *
 from global_positioning import GroundtruthPose
 
 
@@ -35,6 +36,9 @@ def run(config):
     rate_limiter = rospy.Rate(100)
 
     robot_intances = []
+    police_intances = []
+    baddy_instances = []
+    instance_dict = {}
     for robot_index, robot in enumerate(config.robots):
 
         print(robot)
@@ -53,6 +57,15 @@ def run(config):
         positioning = PositioningClass(config, robot)
         robot_instance = RobotClass(publisher, config, robot, sensor, positioning)
         robot_intances.append(robot_instance)
+        instance_dict[robot.name] = robot_instance
+        if robot.type == 'police':
+            police_intances.append(robot_instance)
+        else:
+            baddy_instances.append(robot_instance)
+
+    # Pass {robot_name: robot_instance} to each instance for future use
+    for robot in robot_intances:
+        robot.set_instance_dict(instance_dict)
 
     while not rospy.is_shutdown():
         # Make sure all measurements are ready.
@@ -62,18 +75,44 @@ def run(config):
         if not all([robot.positioning.ready for robot in robot_intances]):
             rate_limiter.sleep()
             continue
-        captured = set()
-        for i, robot in enumerate(robot_intances):    
-            if robot.type == "police":
-                captured.union(robot.captured)
-                robot.add_capture(captured)
-            else:
-                if config.robots[i].free == False:
-                    robot.stop()
-                    continue
+
+        for i, robot in enumerate(robot_intances):
             robot.action()
 
-            # print(robot.get_current_position())
+        # Conduct strategy
+        for i, police in enumerate(police_intances):
+            if police.terminate:
+                continue
+            nearest_baddy = (np.inf, None)
+            for j, baddy in enumerate(baddy_instances):
+                if not baddy.free:
+                    # this has been captured
+                    continue
+
+                dist = get_distance(police.current_position, baddy.current_position)
+                if dist<CAPTURE_DISTANCE:
+                    # This police captures the baddy
+                    police.add_capture(baddy.name)
+                    baddy.get_captured_by(police.name)
+
+                if baddy.free:
+                    if dist < nearest_baddy[0]:
+                        # This baddy is more close
+                        nearest_baddy = (dist, baddy)
+
+            if nearest_baddy[1] is None:
+                # No free baddies
+                print('no free baddies running, stop the agent')
+                police.stop()
+            else:
+                # simple strategy to chase the nearest baddy
+                if police.current_target == nearest_baddy[1].name:
+                    pass
+                else:
+                    print(police.name, 'changed its target to', nearest_baddy[1].name)
+                    police.set_target(nearest_baddy[1].name)
+
+
 
 
 if __name__ == '__main__':
@@ -91,27 +130,25 @@ if __name__ == '__main__':
                 'name': 'robot1',
                 'type': 'police',
                 'epsilon': 0.2,
-                'max_speed': 0.3,
+                'max_speed': 1,
             },
             {
                 'name': 'robot2',
                 'type': 'police',
                 'epsilon': 0.2,
-                'max_speed': 0.3,
+                'max_speed': 0.6,
             },
             {
                 'name': 'robot3',
                 'type': 'baddy',
                 'epsilon': 0.2,
-                'max_speed': 0.9,
-                'free': True
+                'max_speed': 0.7,
             },
             {
                 'name': 'robot4',
                 'type': 'baddy',
                 'epsilon': 0.2,
                 'max_speed': 0.9,
-                'free': True
             },
         ],
         'obstacles': [
@@ -123,6 +160,15 @@ if __name__ == '__main__':
                     'radius': .3,
                 }
             },
+            {
+                'name': 'walls',
+                'params': {
+                    'type': 'square_wall',
+                    'position': np.array([-8.64, -8.64], dtype=np.float32),
+                    'dx': 8.64*2,
+                    'dy': 8.64*2,
+                }
+            }
         ]
     }
 
