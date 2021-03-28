@@ -230,13 +230,13 @@ class Baddy(RobotAbstract):
                 combined_v += v_avoid
 
 
-        # v_avoid = get_velocity_to_avoid_obstacles(point_position,
-        #                                           [obs.data.position for obs in observations.values() if
-        #                                                            obs.type == 'cylinder'],
-        #                                           [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
-        #                                            obs.type == 'cylinder'],
-        #                                           max_speed=self.config.max_speed)
-        # combined_v += v_avoid
+        v_avoid = get_velocity_to_avoid_obstacles(point_position,
+                                                   [obs.data.position for obs in observations.values() if
+                                                                    obs.type == 'cylinder'],
+                                                   [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
+                                                    obs.type == 'cylinder'],
+                                                   max_speed=self.config.max_speed)
+        combined_v += v_avoid
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
 

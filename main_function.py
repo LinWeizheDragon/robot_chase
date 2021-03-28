@@ -157,7 +157,7 @@ if __name__ == '__main__':
                 'params': {
                     'type': 'cylinder',
                     'position': np.array([.3, .2], dtype=np.float32),
-                    'radius': .3,
+                    'radius': 1.5,
                 }
             },
             {

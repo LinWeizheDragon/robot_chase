@@ -34,7 +34,7 @@
 
         <!-- Our custom model -->
 		<include>
-			<uri>model://large</uri>
+			<uri>model://one_cylinder</uri>
 		</include>
 
         <scene>
