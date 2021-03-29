@@ -16,4 +16,4 @@ open RViz using
 ```
 rosrun rviz rviz
 ```
-then go to ```robot_chase/rviz/``` open ```velocity_view.rviz```
+In ```File - Open Config ``` go to ```robot_chase/rviz/``` open ```velocity_view.rviz```
