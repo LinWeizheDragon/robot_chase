@@ -45,6 +45,7 @@ def run(config):
         velocity_publisher = rospy.Publisher('/{}/cmd_vel'.format(robot.name), Twist, queue_size=5)
         pose_publisher = rospy.Publisher('/{}/pose'.format(robot.name), PoseStamped, queue_size=5)
         marker_publisher = rospy.Publisher('/{}/marker'.format(robot.name), Marker, queue_size=5)
+        goal_publisher = rospy.Publisher('/{}/goal'.format(robot.name), Marker, queue_size=5)
         if robot.type == 'police':
             RobotClass = Police
             PositioningClass = GroundtruthPose
@@ -56,7 +57,7 @@ def run(config):
 
         sensor = SensorClass(robot)
         positioning = PositioningClass(config, robot)
-        robot_instance = RobotClass(velocity_publisher, pose_publisher, marker_publisher, config, robot, sensor, positioning)
+        robot_instance = RobotClass(velocity_publisher, pose_publisher, marker_publisher, goal_publisher, config, robot, sensor, positioning)
         robot_intances.append(robot_instance)
         instance_dict[robot.name] = robot_instance
         if robot.type == 'police':

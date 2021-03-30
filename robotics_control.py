@@ -10,7 +10,7 @@ from constant import *
 from tf.transformations import quaternion_from_euler
 
 class RobotAbstract():
-    def __init__(self, velocity_publisher, pose_publisher, marker_publisher, 
+    def __init__(self, velocity_publisher, pose_publisher, marker_publisher, goal_publisher,
                  global_config,
                  config,
                  sensor,
@@ -19,11 +19,13 @@ class RobotAbstract():
         self.publisher = velocity_publisher
         self.pose_publisher = pose_publisher
         self.marker_publisher = marker_publisher
+        self.goal_publisher = goal_publisher
         self.type = config.type
         self.name = config.name
         self.positioning = positioning
         self.global_config = global_config
         self.config = config
+        self.frame_id = 0
         self.terminate = False
         self.pose_estimator = PoseEstimator(global_config=global_config,
                                             config=config)
@@ -41,6 +43,7 @@ class RobotAbstract():
             vel_msg = Twist()
             vel_msg.linear.x = u
             vel_msg.angular.z = w
+            self.frame_id = frame_id
             self.publisher.publish(vel_msg)
             return
 
@@ -93,8 +96,8 @@ class RobotAbstract():
         return self.positioning.pose
 
 class Police(RobotAbstract):
-    def __init__(self, publisher, pose_publisher, marker_publisher, global_config, config, sensor, positioning):
-        RobotAbstract.__init__(self, publisher, pose_publisher, marker_publisher, global_config, config, sensor, positioning)
+    def __init__(self, publisher, pose_publisher, marker_publisher, goal_publisher, global_config, config, sensor, positioning):
+        RobotAbstract.__init__(self, publisher, pose_publisher, marker_publisher, goal_publisher, global_config, config, sensor, positioning)
         self.captured = set()
         self.current_target = None
 
@@ -126,11 +129,11 @@ class Police(RobotAbstract):
     def get_potential_field(self, point_position, observations):
         # Police get potential field
         # Baddies are targets
-        print('police estimation')
-        print(
-            self.name,
-            self.pose_estimator.distribution_dict
-        )
+        #print('police estimation')
+        #print(
+        #    self.name,
+        #    self.pose_estimator.distribution_dict
+        #)
         baddy_names = [robot.name for robot in self.global_config.robots if (robot.type == 'baddy' and robot.name not in self.captured)]
         police_names = [robot.name for robot in self.global_config.robots if robot.type == 'police']
         baddies = {}
@@ -165,6 +168,7 @@ class Police(RobotAbstract):
         if self.current_target is not None:
             goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target, 100).mean
             goal_position = goal_pose[:2]
+            generate_marker(self.goal_publisher, self.name, 0, goal_position, self.frame_id, goal=True)
             # goal_position = baddies[self.current_target].data[:2]
             v_chase_baddy = get_velocity_to_reach_goal(point_position, goal_position,
                                             max_speed=self.config.max_speed)
@@ -188,8 +192,8 @@ class Police(RobotAbstract):
         return combined_v
 
 class Baddy(RobotAbstract):
-    def __init__(self, publisher, pose_publisher, maker_publisher, global_config, config, sensor, positioning):
-        RobotAbstract.__init__(self, publisher, pose_publisher, maker_publisher, global_config, config, sensor, positioning)
+    def __init__(self, publisher, pose_publisher, maker_publisher, goal_publisher, global_config, config, sensor, positioning):
+        RobotAbstract.__init__(self, publisher, pose_publisher, maker_publisher, goal_publisher, global_config, config, sensor, positioning)
         self.free = True
         self.capture_by = set()
 
@@ -354,7 +358,7 @@ class PoseEstimator():
     def process_observations(self, observations):
         observations = EasyDict(observations.copy())
         for obj_name, obj in observations.items():
-            print(obj_name, obj)
+            #print(obj_name, obj)
             if obj_name in self.distribution_dict.keys():
                 # This is a robot that we want to track
                 if obj.type == 'realtime':
@@ -536,22 +540,31 @@ def generate_pose_msg(pose_publisher, v, point_position, frame_id):
     pose_publisher.publish(pose_msg)
     return pose_msg
 
-def generate_marker(marker_publisher, robot_name, v, pose, frame_id):
+def generate_marker(marker_publisher, robot_name, v, pose, frame_id, goal=False):
     marker = Marker()
     marker.header.frame_id = frame_id
     marker.header.stamp = rospy.Time.now()
     marker.header.frame_id = 'robot1_tf/base_link'
     marker.type = marker.TEXT_VIEW_FACING
     marker.action = marker.ADD
-    marker.pose.position = pose.pose.position
+    
     marker.pose.orientation.x = 0.0
     marker.pose.orientation.y = 0.0
     marker.pose.orientation.z = 0.0
     marker.pose.orientation.w = 1.0
-    marker.text = 'R{}: {}'.format(robot_name[-1], round(np.linalg.norm(v),2))
-    marker.color.r = 1.0
-    marker.color.g = 0.9
-    marker.color.b = 0.0
+    if goal:
+        marker.pose.position.x = pose[0]
+        marker.pose.position.y = pose[1]
+        marker.text = 'G{}'.format(robot_name[-1])
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.5
+    else:
+        marker.text = 'R{}: {}'.format(robot_name[-1], round(np.linalg.norm(v),2))
+        marker.pose.position = pose.pose.position
+        marker.color.r = 1.0
+        marker.color.g = 0.9
+        marker.color.b = 0.0
     marker.color.a = 1.0
     marker.scale.x = 1.0
     marker.scale.y = 1.0
