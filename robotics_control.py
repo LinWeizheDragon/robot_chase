@@ -166,7 +166,7 @@ class Police(RobotAbstract):
 
         # If has a target baddy
         if self.current_target is not None:
-            goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target, 100).mean
+            goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target, 5).mean
             goal_position = goal_pose[:2]
             generate_marker(self.goal_publisher, self.name, 0, goal_position, self.frame_id, goal=True)
             # goal_position = baddies[self.current_target].data[:2]
@@ -321,9 +321,10 @@ class PoseEstimator():
         if step < 1:
             raise ValueError('step to request must be larger than 0!')
         else:
+            mean_t1 = self.distribution_dict[name].mean
+            variance_t1 = self.distribution_dict[name].variance
             while remaining_step > 0:
-                mean_t1 = self.distribution_dict[name].mean
-                variance_t1 = self.distribution_dict[name].variance
+                
                 rotation_matrix = np.array([[np.cos(mean_t1[YAW]), -np.sin(mean_t1[YAW]), 0],
                                             [np.sin(mean_t1[YAW]), np.cos(mean_t1[YAW]), 0],
                                             [0, 0, 1]], dtype=np.float32)
@@ -348,6 +349,8 @@ class PoseEstimator():
                 mean_t1 = mean_t2.copy()
                 variance_t1 = variance_t2.copy()
                 remaining_step -= 1
+                #if name == "robot3":
+                    #print(mean_t2, remaining_step)
 
             return EasyDict(
                 mean=mean_t2,
