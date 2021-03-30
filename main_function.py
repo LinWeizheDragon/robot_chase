@@ -127,6 +127,7 @@ if __name__ == '__main__':
     print("Python Version {}".format(str(sys.version).replace('\n', '')))
 
     configs = {
+        'dt': 0.05,
         'robots': [
             {
                 'name': 'robot1',
