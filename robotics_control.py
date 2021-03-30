@@ -7,6 +7,7 @@ import numpy as np
 from easydict import EasyDict
 import rospy
 from constant import *
+from tf.transformations import quaternion_from_euler
 
 class RobotAbstract():
     def __init__(self, velocity_publisher, pose_publisher, marker_publisher, 
@@ -411,8 +412,7 @@ def generate_pose_msg(pose_publisher, v, point_position, frame_id):
     pose_msg.header.seq = frame_id
     pose_msg.header.stamp = rospy.Time.now()
     pose_msg.header.frame_id = 'robot1_tf/base_link'
-    pose_msg.pose.orientation.x = v[X]
-    pose_msg.pose.orientation.y = v[Y]
+    pose_msg.pose.orientation.x, pose_msg.pose.orientation.y, pose_msg.pose.orientation.z, pose_msg.pose.orientation.w = quaternion_from_euler(0, 0, np.arctan2(v[1], v[0]))
     pose_msg.pose.position.x = point_position[0]
     pose_msg.pose.position.y = point_position[1]
     pose_publisher.publish(pose_msg)
