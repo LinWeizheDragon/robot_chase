@@ -12,10 +12,10 @@ import numpy as np
 import rospy
 import sys
 from easydict import EasyDict
-
+from visualization_msgs.msg import Marker
 # Robot motion commands:
 # http://docs.ros.org/api/geometry_msgs/html/msg/Twist.html
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PoseStamped
 # Laser scan message:
 # http://docs.ros.org/api/sensor_msgs/html/msg/LaserScan.html
 # For groundtruth information.
@@ -42,8 +42,9 @@ def run(config):
     for robot_index, robot in enumerate(config.robots):
 
         print(robot)
-        publisher = rospy.Publisher('/{}/cmd_vel'.format(robot.name), Twist, queue_size=5)
-
+        velocity_publisher = rospy.Publisher('/{}/cmd_vel'.format(robot.name), Twist, queue_size=5)
+        pose_publisher = rospy.Publisher('/{}/pose'.format(robot.name), PoseStamped, queue_size=5)
+        marker_publisher = rospy.Publisher('/{}/marker'.format(robot.name), Marker, queue_size=5)
         if robot.type == 'police':
             RobotClass = Police
             PositioningClass = GroundtruthPose
@@ -55,7 +56,7 @@ def run(config):
 
         sensor = SensorClass(robot)
         positioning = PositioningClass(config, robot)
-        robot_instance = RobotClass(publisher, config, robot, sensor, positioning)
+        robot_instance = RobotClass(velocity_publisher, pose_publisher, marker_publisher, config, robot, sensor, positioning)
         robot_intances.append(robot_instance)
         instance_dict[robot.name] = robot_instance
         if robot.type == 'police':
@@ -68,6 +69,7 @@ def run(config):
         robot.set_instance_dict(instance_dict)
 
     while not rospy.is_shutdown():
+        frame_id = 0
         # Make sure all measurements are ready.
         if not all([robot.sensor.ready for robot in robot_intances]):
             rate_limiter.sleep()
@@ -77,7 +79,7 @@ def run(config):
             continue
 
         for i, robot in enumerate(robot_intances):
-            robot.action()
+            robot.action(frame_id)
 
         # Conduct strategy
         for i, police in enumerate(police_intances):
@@ -111,7 +113,7 @@ def run(config):
                 else:
                     print(police.name, 'changed its target to', nearest_baddy[1].name)
                     police.set_target(nearest_baddy[1].name)
-
+        frame_id += 1
 
 
 
@@ -158,7 +160,7 @@ if __name__ == '__main__':
                 'params': {
                     'type': 'cylinder',
                     'position': np.array([.3, .2], dtype=np.float32),
-                    'radius': .3,
+                    'radius': 1.5,
                 }
             },
             {

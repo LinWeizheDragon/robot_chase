@@ -12,3 +12,8 @@ to use the customized environment, set your ENVIRONMENT VARIABLE as:
 ```
 export GAZEBO_MODEL_PATH= your-path-to-robot_chase"robot_chase/models“
 ```
+open RViz using
+```
+rosrun rviz rviz
+```
+In ```File - Open Config ``` go to ```robot_chase/rviz/``` open ```velocity_view.rviz```

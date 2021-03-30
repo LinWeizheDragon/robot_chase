@@ -1,20 +1,23 @@
 
 # Robot motion commands:
 # http://docs.ros.org/api/geometry_msgs/html/msg/Twist.html
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist , PoseStamped
+from visualization_msgs.msg import Marker
 import numpy as np
 from easydict import EasyDict
-
+import rospy
 from constant import *
 
 class RobotAbstract():
-    def __init__(self, publisher,
+    def __init__(self, velocity_publisher, pose_publisher, marker_publisher, 
                  global_config,
                  config,
                  sensor,
                  positioning):
         self.sensor = sensor
-        self.publisher = publisher
+        self.publisher = velocity_publisher
+        self.pose_publisher = pose_publisher
+        self.marker_publisher = marker_publisher
         self.type = config.type
         self.name = config.name
         self.positioning = positioning
@@ -30,7 +33,7 @@ class RobotAbstract():
     def get_instance_by_name(self, name):
         return self.instance_dict.get(name, None)
 
-    def action(self):
+    def action(self, frame_id):
 
         if self.terminate:
             u, w = 0, 0
@@ -66,15 +69,16 @@ class RobotAbstract():
                                 groundtruth_pose=pose,
                                 laser_measurements=laser_measurements)
 
-        u, w = self.controller(measurements=measurements)
-
+        u, w, v = self.controller(measurements=measurements)
         # measurements = self.sensor.measurements
         # u, w = self.controller(*measurements)
         vel_msg = Twist()
         vel_msg.linear.x = u
         vel_msg.angular.z = w
         self.publisher.publish(vel_msg)
-        # print('robot', self.name, 'actioned', u, w)
+
+        pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
+        generate_marker(self.marker_publisher, self.name, v, pose_msg, frame_id)
 
     def stop(self):
         self.terminate = True
@@ -88,8 +92,8 @@ class RobotAbstract():
         return self.positioning.pose
 
 class Police(RobotAbstract):
-    def __init__(self, publisher, global_config, config, sensor, positioning):
-        RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
+    def __init__(self, publisher, pose_publisher, marker_publisher, global_config, config, sensor, positioning):
+        RobotAbstract.__init__(self, publisher, pose_publisher, marker_publisher, global_config, config, sensor, positioning)
         self.captured = set()
         self.current_target = None
 
@@ -116,7 +120,7 @@ class Police(RobotAbstract):
         # print('robot', self.name,
         #       'current pos', m.groundtruth_pose,
         #       'control signals', u, w)
-        return u, w
+        return u, w ,v
 
     def get_potential_field(self, point_position, observations):
         # Police get potential field
@@ -171,20 +175,20 @@ class Police(RobotAbstract):
                 v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
                 combined_v += v_avoid
 
-        # v_avoid = get_velocity_to_avoid_obstacles(point_position,
-        #                                           [obs.data.position for obs in observations.values() if
-        #                                                            obs.type == 'cylinder'],
-        #                                           [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
-        #                                            obs.type == 'cylinder'],
-        #                                           max_speed=self.config.max_speed)
-        # combined_v += v_avoid
+        v_avoid = get_velocity_to_avoid_obstacles(point_position,
+                                                   [obs.data.position for obs in observations.values() if
+                                                                    obs.type == 'cylinder'],
+                                                   [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
+                                                    obs.type == 'cylinder'],
+                                                   max_speed=self.config.max_speed)
+        combined_v += v_avoid
 
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
 
 class Baddy(RobotAbstract):
-    def __init__(self, publisher, global_config, config, sensor, positioning):
-        RobotAbstract.__init__(self, publisher, global_config, config, sensor, positioning)
+    def __init__(self, publisher, pose_publisher, maker_publisher, global_config, config, sensor, positioning):
+        RobotAbstract.__init__(self, publisher, pose_publisher, maker_publisher, global_config, config, sensor, positioning)
         self.free = True
         self.capture_by = set()
 
@@ -199,7 +203,7 @@ class Baddy(RobotAbstract):
         # u, w = braitenberg(*laser_measurements)
         v = self.get_potential_field(m.point_position, m.observations)
         u, w = feedback_linearized(m.groundtruth_pose, v, epsilon=self.config.epsilon)
-        return u, w
+        return u, w, v
 
 
     def get_potential_field(self, point_position, observations):
@@ -242,13 +246,13 @@ class Baddy(RobotAbstract):
                 combined_v += v_avoid
 
 
-        # v_avoid = get_velocity_to_avoid_obstacles(point_position,
-        #                                           [obs.data.position for obs in observations.values() if
-        #                                                            obs.type == 'cylinder'],
-        #                                           [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
-        #                                            obs.type == 'cylinder'],
-        #                                           max_speed=self.config.max_speed)
-        # combined_v += v_avoid
+        v_avoid = get_velocity_to_avoid_obstacles(point_position,
+                                                   [obs.data.position for obs in observations.values() if
+                                                                    obs.type == 'cylinder'],
+                                                   [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
+                                                    obs.type == 'cylinder'],
+                                                   max_speed=self.config.max_speed)
+        combined_v += v_avoid
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
 
@@ -520,3 +524,36 @@ def feedback_linearized(pose, velocity, epsilon):
   w = 1 / epsilon * (-velocity[X] * np.sin(pose[YAW]) + velocity[Y] * np.cos(pose[YAW]))
   return u, w
 
+def generate_pose_msg(pose_publisher, v, point_position, frame_id):
+    pose_msg = PoseStamped()
+    pose_msg.header.seq = frame_id
+    pose_msg.header.stamp = rospy.Time.now()
+    pose_msg.header.frame_id = 'robot1_tf/base_link'
+    pose_msg.pose.orientation.x = v[X]
+    pose_msg.pose.orientation.y = v[Y]
+    pose_msg.pose.position.x = point_position[0]
+    pose_msg.pose.position.y = point_position[1]
+    pose_publisher.publish(pose_msg)
+    return pose_msg
+
+def generate_marker(marker_publisher, robot_name, v, pose, frame_id):
+    marker = Marker()
+    marker.header.frame_id = frame_id
+    marker.header.stamp = rospy.Time.now()
+    marker.header.frame_id = 'robot1_tf/base_link'
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose.position = pose.pose.position
+    marker.pose.orientation.x = 0.0
+    marker.pose.orientation.y = 0.0
+    marker.pose.orientation.z = 0.0
+    marker.pose.orientation.w = 1.0
+    marker.text = 'R{}: {}'.format(robot_name[-1], round(np.linalg.norm(v),2))
+    marker.color.r = 1.0
+    marker.color.g = 0.9
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 1.0
+    marker.scale.y = 1.0
+    marker.scale.z = 0.3
+    marker_publisher.publish(marker)
