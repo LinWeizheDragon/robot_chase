@@ -21,6 +21,8 @@ class RobotAbstract():
         self.global_config = global_config
         self.config = config
         self.terminate = False
+        self.pose_estimator = PoseEstimator(global_config=global_config,
+                                            config=config)
 
     def set_instance_dict(self, instance_dict):
         self.instance_dict = instance_dict
@@ -53,6 +55,10 @@ class RobotAbstract():
         laser_measurements = self.sensor.measurements
         observations = groundtruth.perceived_poses
         # print('other observations', groundtruth.perceived_poses)
+
+        # Process observations using PoseEsimator
+        self.pose_estimator.process_observations(observations)
+
         # Pass measurements to controller
         measurements = EasyDict(point_position=point_position,
                                 goal_position=goal_position,
@@ -115,7 +121,11 @@ class Police(RobotAbstract):
     def get_potential_field(self, point_position, observations):
         # Police get potential field
         # Baddies are targets
-
+        print('police estimation')
+        print(
+            self.name,
+            self.pose_estimator.distribution_dict
+        )
         baddy_names = [robot.name for robot in self.global_config.robots if (robot.type == 'baddy' and robot.name not in self.captured)]
         police_names = [robot.name for robot in self.global_config.robots if robot.type == 'police']
         baddies = {}
@@ -148,7 +158,9 @@ class Police(RobotAbstract):
 
         # If has a target baddy
         if self.current_target is not None:
-            goal_position = baddies[self.current_target].data[:2]
+            goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target, 100).mean
+            goal_position = goal_pose[:2]
+            # goal_position = baddies[self.current_target].data[:2]
             v_chase_baddy = get_velocity_to_reach_goal(point_position, goal_position,
                                             max_speed=self.config.max_speed)
             combined_v += v_chase_baddy
@@ -217,10 +229,10 @@ class Baddy(RobotAbstract):
         # escape from the police
         for police_name, police_data in police.items():
             v_escape = get_velocity_to_avoid_obstacles(point_position,
-                                                      [police_data.data[:2]],
-                                                      [ROBOT_RADIUS],
-                                            max_speed=self.config.max_speed,
-                                                      scale_factor=5)
+                                                       [police_data.data[:2]],
+                                                       [ROBOT_RADIUS],
+                                                       max_speed=self.config.max_speed,
+                                                       scale_factor=5)
             combined_v += v_escape
 
         # Avoid hitting walls
@@ -239,6 +251,112 @@ class Baddy(RobotAbstract):
         # combined_v += v_avoid
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
+
+NOT_READY = 0
+ACCURATE = 1
+ESTIMATED = 2
+
+class PoseEstimator():
+    '''
+    This class is a unit that estimates the position of other agents
+    '''
+    def __init__(self, global_config, config):
+        self.name = config.name # self name
+        self.global_config = global_config
+        self.config = config
+
+        self.distribution_dict = {}
+        for robot_config in self.global_config.robots:
+            self.distribution_dict[robot_config.name] = {
+                'mean': np.zeros(3, dtype=np.float32),
+                'variance': np.zeros((3, 3), dtype=np.float32),
+                'state': NOT_READY,
+            }
+        self.distribution_dict = EasyDict(self.distribution_dict)
+
+    def set_accurate_distribution(self, name, pose):
+        '''
+        Sets an accurate distribution for perceived agents
+        :param name: robot name
+        :param pose: robot pose
+        :return:
+        '''
+        mean = pose
+        variance = np.zeros((3, 3), dtype=np.float32)
+        variance[X, X] = 0.1
+        variance[Y, Y] = 0.1
+        variance[YAW, YAW] = 0.01
+        state = ACCURATE
+        self.distribution_dict[name].mean = mean
+        self.distribution_dict[name].variance = variance
+        self.distribution_dict[name].state = state
+
+    def set_estimated_distribution(self, name):
+        if self.distribution_dict[name].state == NOT_READY:
+            # Do nothing when this robot did not appear for even once
+            return
+        state = ESTIMATED
+        estimated_distribution = self.get_estimated_distribution(name)
+        self.distribution_dict[name].mean = estimated_distribution.mean
+        self.distribution_dict[name].variance = estimated_distribution.variance
+        self.distribution_dict[name].state = state
+
+
+    def get_estimated_distribution(self, name, step=1):
+        '''
+        Estimated the positioning of a robot
+        :param name: robot name
+        :return:
+        '''
+        remaining_step = step
+        if step < 1:
+            raise ValueError('step to request must be larger than 0!')
+        else:
+            while remaining_step > 0:
+                mean_t1 = self.distribution_dict[name].mean
+                variance_t1 = self.distribution_dict[name].variance
+                rotation_matrix = np.array([[np.cos(mean_t1[YAW]), -np.sin(mean_t1[YAW]), 0],
+                                            [np.sin(mean_t1[YAW]), np.cos(mean_t1[YAW]), 0],
+                                            [0, 0, 1]], dtype=np.float32)
+
+                # v and w in robot frame
+                v = np.sqrt(mean_t1[X] ** 2 + mean_t1[Y] ** 2)
+                w = mean_t1[YAW]
+
+                # Motion model
+                variance_move = np.zeros((3, 3), dtype=np.float32)
+                variance_move[X, X] = 0.1
+                variance_move[Y, Y] = 0.5
+                variance_move[YAW, YAW] = 0.05
+                # in robot frame, move forward with v and rotate in w
+                mean_move = np.array([v, 0, w])
+
+                # Get new multivariate Gaussian
+                mean_t2 = mean_t1 + mean_move * self.global_config.dt
+                variance_t2 = np.matmul(rotation_matrix, variance_t1)
+                variance_t2 = np.matmul(variance_t2, rotation_matrix.T)
+                variance_t2 = variance_t1 + variance_t2
+                mean_t1 = mean_t2.copy()
+                variance_t1 = variance_t2.copy()
+                remaining_step -= 1
+
+            return EasyDict(
+                mean=mean_t2,
+                variance=variance_t2,
+                step=step,
+            )
+
+    def process_observations(self, observations):
+        observations = EasyDict(observations.copy())
+        for obj_name, obj in observations.items():
+            print(obj_name, obj)
+            if obj_name in self.distribution_dict.keys():
+                # This is a robot that we want to track
+                if obj.type == 'realtime':
+                    # Accurate positioning
+                    self.set_accurate_distribution(obj_name, obj.data)
+                else:
+                    self.set_estimated_distribution(obj_name)
 
 
 ########## Control functions ##########
