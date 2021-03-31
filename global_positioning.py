@@ -23,33 +23,25 @@ class GroundtruthPose(object):
         # if not idx:
         #   raise ValueError('Specified name "{}" does not exist.'.format(self._name))
         for i, name in enumerate(msg.name):
+
+            obj_pose = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
+            obj_pose[0] = msg.pose[i].position.x
+            obj_pose[1] = msg.pose[i].position.y
+            _, _, yaw = euler_from_quaternion([
+                msg.pose[i].orientation.x,
+                msg.pose[i].orientation.y,
+                msg.pose[i].orientation.z,
+                msg.pose[i].orientation.w])
+            obj_pose[2] = yaw
             if name == self._name:
-                self.single_pose[0] = msg.pose[i].position.x
-                self.single_pose[1] = msg.pose[i].position.y
-                _, _, yaw = euler_from_quaternion([
-                    msg.pose[i].orientation.x,
-                    msg.pose[i].orientation.y,
-                    msg.pose[i].orientation.z,
-                    msg.pose[i].orientation.w])
-                self.single_pose[2] = yaw
-                self.all_pose[name] = {
-                    'type': 'realtime',
-                    'data': self.single_pose.copy(),
-                }
-            else:
-                obj_pose = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
-                obj_pose[0] = msg.pose[i].position.x
-                obj_pose[1] = msg.pose[i].position.y
-                _, _, yaw = euler_from_quaternion([
-                    msg.pose[i].orientation.x,
-                    msg.pose[i].orientation.y,
-                    msg.pose[i].orientation.z,
-                    msg.pose[i].orientation.w])
-                obj_pose[2] = yaw
-                self.all_pose[name] = {
-                    'type': 'realtime',
-                    'data': obj_pose.copy(),
-                }
+                self.single_pose = obj_pose.copy()
+            self.all_pose[name] = {
+                'type': 'realtime',
+                'data': {
+                    'pose': obj_pose.copy(),
+                    'twist': msg.twist[i],
+                },
+            }
         self.ready_flag = True
 
     @property
