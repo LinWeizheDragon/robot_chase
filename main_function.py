@@ -160,8 +160,24 @@ if __name__ == '__main__':
                 'name': 'cylinder1',
                 'params': {
                     'type': 'cylinder',
-                    'position': np.array([.3, .2], dtype=np.float32),
+                    'position': np.array([3, 2], dtype=np.float32),
                     'radius': 1.5,
+                }
+            },
+            {
+                'name': 'cylinder2',
+                'params': {
+                    'type': 'cylinder',
+                    'position': np.array([-1, -5.5], dtype=np.float32),
+                    'radius': 1.3,
+                }
+            },
+            {
+                'name': 'cylinder3',
+                'params': {
+                    'type': 'cylinder',
+                    'position': np.array([-4, 3.5], dtype=np.float32),
+                    'radius': 1.2,
                 }
             },
             {
