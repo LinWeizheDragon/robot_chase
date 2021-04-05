@@ -501,14 +501,14 @@ def get_velocity_to_avoid_obstacles(position,
 
 
 def get_velocity_to_avoid_walls(position, wall_config, max_speed,
-                                scale_factor=0.01):
+                                scale_factor=0.05):
     # This function returns velocity to avoid hitting walls
     wall_data = wall_config.params
     v = np.zeros(2, dtype=np.float32)
     if wall_data.type == 'square_wall':
         def compute_velocity(distance, direction):
             # Compute the decay factor in the range of [0, 1]
-            decay_factor = np.exp(- max(0, (distance - 3)) * scale_factor)
+            decay_factor = np.exp(- max(0, (distance - 3 )**1) * scale_factor)
             # Assign amplitude
             amplitude = decay_factor * max_speed
             return direction * amplitude
