@@ -126,6 +126,8 @@ class Police(RobotAbstract):
         # print('robot', self.name,
         #       'current pos', m.groundtruth_pose,
         #       'control signals', u, w)
+        if self.name == 'robot1':
+            print(self.name, v,u,w,np.cos(m.groundtruth_pose[YAW]), np.sin(m.groundtruth_pose[YAW]))
         return u, w, v
 
     def get_potential_field(self, point_position, observations):
@@ -151,9 +153,11 @@ class Police(RobotAbstract):
 
         # avoid hitting other police
         for police_name, police_data in police.items():
+            if police_name == self.name:
+                continue
             combined_v += get_velocity_to_avoid_obstacles(point_position,
                                                           [police_data.data.pose[:2]],
-                                                          [ROBOT_RADIUS + ROBOT_RADIUS],
+                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
                                                           max_speed=self.config.max_speed,
                                                           scale_factor=10)
 
@@ -163,7 +167,7 @@ class Police(RobotAbstract):
                 continue
             combined_v += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
-                                                          [ROBOT_RADIUS + ROBOT_RADIUS],
+                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.obstacle],
                                                           max_speed=self.config.max_speed,
                                                           scale_factor=10)
 
@@ -171,7 +175,7 @@ class Police(RobotAbstract):
         if self.current_target is not None:
             goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
                                                                        observations[self.current_target].data,
-                                                                       step=50).mean
+                                                                       step=30).mean
             goal_position = goal_pose[:2]
             generate_marker(self.goal_publisher, self.name, 0, goal_position, self.frame_id, goal=True)
             # goal_position = baddies[self.current_target].data[:2]
@@ -189,7 +193,7 @@ class Police(RobotAbstract):
         v_avoid = get_velocity_to_avoid_obstacles(point_position,
                                                   [obs.data.position for obs in observations.values() if
                                                    obs.type == 'cylinder'],
-                                                  [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
+                                                  [ROBOT_RADIUS + obs.data.radius + SECURITY_DISTANCE.obstacle for obs in observations.values() if
                                                    obs.type == 'cylinder'],
                                                   max_speed=self.config.max_speed)
         combined_v += v_avoid
@@ -237,34 +241,43 @@ class Baddy(RobotAbstract):
 
         # avoid hitting other baddies
         for baddy_name, baddy_data in baddies.items():
+            if baddy_name == self.name:
+                continue
             combined_v += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
-                                                          [ROBOT_RADIUS + ROBOT_RADIUS],
+                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
                                                           max_speed=self.config.max_speed,
                                                           scale_factor=10)
-
+        #if self.frame_id%1000 ==0:
+        #    print(self.name, "other baddy: ", combined_v)
         # escape from the police
         for police_name, police_data in police.items():
             v_escape = get_velocity_to_avoid_obstacles(point_position,
                                                        [police_data.data.pose[:2]],
-                                                       [ROBOT_RADIUS],
+                                                       [ROBOT_RADIUS +  SECURITY_DISTANCE.competitor],
                                                        max_speed=self.config.max_speed,
                                                        scale_factor=5)
             combined_v += v_escape
-
+        #v_temp=combined_v
+        #if self.frame_id%1000 ==0:
+        #    print(self.name, "avoid police: ", v_escape)
         # Avoid hitting walls
         for obstacle in self.global_config.obstacles:
             if obstacle.params.type == 'square_wall':
                 v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
                 combined_v += v_avoid
-
+        #if self.frame_id%1000 ==0:
+        #    print(self.name, "avoid wall: ", combined_v - v_temp)
+        #print(self.name, "cylinder: ")
         v_avoid = get_velocity_to_avoid_obstacles(point_position,
                                                   [obs.data.position for obs in observations.values() if
                                                    obs.type == 'cylinder'],
-                                                  [ROBOT_RADIUS + obs.data.radius for obs in observations.values() if
+                                                  [ROBOT_RADIUS + obs.data.radius + SECURITY_DISTANCE.obstacle for obs in observations.values() if
                                                    obs.type == 'cylinder'],
                                                   max_speed=self.config.max_speed)
         combined_v += v_avoid
+  
+        
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
 
@@ -473,28 +486,29 @@ def get_velocity_to_avoid_obstacles(position,
         to_obs_distance = get_distance(position, obstacle_position)
         unit_direction = (position - obstacle_position) / to_obs_distance
         # Compute the decay factor in the range of [0, 1]
-        decay_factor = np.exp(-np.abs((to_obs_distance - obstacle_radius - SECURITY_DISTANCE)) * scale_factor)
+        decay_factor = np.exp(-np.abs((to_obs_distance - obstacle_radius)) * scale_factor)
 
         # Assign amplitude
-        if to_obs_distance <= obstacle_radius + SECURITY_DISTANCE:
+        if to_obs_distance <= obstacle_radius:
             amplitude = max_speed
         else:
             amplitude = decay_factor * max_speed
         # add to v. There might be multiple obstacles
         v += unit_direction * amplitude
+        #print("cyliner",i, ": ", obstacle_position, position,obstacle_radius, unit_direction, amplitude)
 
     return v
 
 
 def get_velocity_to_avoid_walls(position, wall_config, max_speed,
-                                scale_factor=0.05):
+                                scale_factor=0.01):
     # This function returns velocity to avoid hitting walls
     wall_data = wall_config.params
     v = np.zeros(2, dtype=np.float32)
     if wall_data.type == 'square_wall':
         def compute_velocity(distance, direction):
             # Compute the decay factor in the range of [0, 1]
-            decay_factor = np.exp(-distance * scale_factor)
+            decay_factor = np.exp(- (distance - 0.3) * scale_factor)
             # Assign amplitude
             amplitude = decay_factor * max_speed
             return direction * amplitude
@@ -554,8 +568,8 @@ def feedback_linearized(pose, velocity, epsilon):
     # MISSING: Implement feedback-linearization to follow the velocity
     # vector given as argument. Epsilon corresponds to the distance of
     # linearized point in front of the robot.
-    u = velocity[X] * np.cos(pose[YAW]) + velocity[Y] * np.sin(pose[YAW])
-    w = 1 / epsilon * (-velocity[X] * np.sin(pose[YAW]) + velocity[Y] * np.cos(pose[YAW]))
+    u = velocity[0] * np.cos(pose[YAW]) + velocity[1] * np.sin(pose[YAW])
+    w = 1 / epsilon * (-velocity[0] * np.sin(pose[YAW]) + velocity[1] * np.cos(pose[YAW]))
     return u, w
 
 
@@ -593,6 +607,7 @@ def generate_marker(marker_publisher, robot_name, v, pose, frame_id, goal=False)
         marker.color.b = 0.5
     else:
         marker.text = 'R{}: {}'.format(robot_name[-1], round(np.linalg.norm(v), 2))
+        #marker.text = 'R{}: {}'.format(robot_name[-1], pose.pose.position)
         marker.pose.position = pose.pose.position
         marker.color.r = 1.0
         marker.color.g = 0.9
