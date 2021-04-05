@@ -369,8 +369,8 @@ class PoseEstimator():
             mean_t1 = self.distribution_dict[name].mean
             variance_t1 = self.distribution_dict[name].variance
             while remaining_step > 0:
-                rotation_matrix = np.array([[np.cos(mean_t1[YAW]), np.sin(mean_t1[YAW]), 0],
-                                            [-np.sin(mean_t1[YAW]), np.cos(mean_t1[YAW]), 0],
+                rotation_matrix = np.array([[np.cos(mean_t1[YAW]), -np.sin(mean_t1[YAW]), 0],
+                                            [np.sin(mean_t1[YAW]), np.cos(mean_t1[YAW]), 0],
                                             [0, 0, 1]], dtype=np.float32)
 
                 # v and w in robot frame
