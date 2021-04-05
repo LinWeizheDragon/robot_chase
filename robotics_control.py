@@ -149,23 +149,25 @@ class Police(RobotAbstract):
             elif obj_name in police_names:
                 police[obj_name] = obj
 
-        combined_v = np.zeros(2, dtype=np.float32)
+        v_dict = EasyDict()
 
         # avoid hitting other police
+        v_dict.avoid_hitting_police  = np.zeros(2, dtype=np.float32)
         for police_name, police_data in police.items():
             if police_name == self.name:
                 continue
-            combined_v += get_velocity_to_avoid_obstacles(point_position,
+            v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
                                                           [police_data.data.pose[:2]],
                                                           [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
                                                           max_speed=self.config.max_speed,
                                                           scale_factor=10)
 
         # avoid hitting other captured baddies
+        v_dict.avoid_hitting_captured_baddies = np.zeros(2, dtype=np.float32)
         for baddy_name, baddy_data in baddies.items():
             if self.get_instance_by_name(baddy_name).free:
                 continue
-            combined_v += get_velocity_to_avoid_obstacles(point_position,
+            v_dict.avoid_hitting_captured_baddies += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
                                                           [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.obstacle],
                                                           max_speed=self.config.max_speed,
@@ -182,13 +184,14 @@ class Police(RobotAbstract):
             v_chase_baddy = get_velocity_to_reach_goal(point_position,
                                                        goal_position,
                                                        max_speed=self.config.max_speed)
-            combined_v += v_chase_baddy
+            v_dict.chase_baddy = v_chase_baddy
 
         # Avoid hitting walls
+        v_dict.avoid_hitting_walls = np.zeros(2, dtype=np.float32)
         for obstacle in self.global_config.obstacles:
             if obstacle.params.type == 'square_wall':
                 v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
-                combined_v += v_avoid
+                v_dict.avoid_hitting_walls += v_avoid
 
         v_avoid = get_velocity_to_avoid_obstacles(point_position,
                                                   [obs.data.position for obs in observations.values() if
@@ -196,7 +199,15 @@ class Police(RobotAbstract):
                                                   [ROBOT_RADIUS + obs.data.radius + SECURITY_DISTANCE.obstacle for obs in observations.values() if
                                                    obs.type == 'cylinder'],
                                                   max_speed=self.config.max_speed)
-        combined_v += v_avoid
+        v_dict.avoid_hitting_obstacles = v_avoid
+
+        combined_v = np.zeros(2, dtype=np.float32)
+        print('====', self.name, ' start====')
+        for v_description, v_value in v_dict.items():
+            print(v_description, v_value, get_magnitude(v_value))
+            combined_v += v_value
+        print('combined:', combined_v, get_magnitude(combined_v))
+        print('====', self.name, ' end====')
 
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
@@ -237,13 +248,14 @@ class Baddy(RobotAbstract):
             elif obj_name in police_names:
                 police[obj_name] = obj
 
-        combined_v = np.zeros(2, dtype=np.float32)
+        v_dict = EasyDict()
 
         # avoid hitting other baddies
+        v_dict.avoid_hitting_baddies = np.zeros(2, dtype=np.float32)
         for baddy_name, baddy_data in baddies.items():
             if baddy_name == self.name:
                 continue
-            combined_v += get_velocity_to_avoid_obstacles(point_position,
+            v_dict.avoid_hitting_baddies += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
                                                           [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
                                                           max_speed=self.config.max_speed,
@@ -251,21 +263,23 @@ class Baddy(RobotAbstract):
         #if self.frame_id%1000 ==0:
         #    print(self.name, "other baddy: ", combined_v)
         # escape from the police
+        v_dict.escape_from_police = np.zeros(2, dtype=np.float32)
         for police_name, police_data in police.items():
             v_escape = get_velocity_to_avoid_obstacles(point_position,
                                                        [police_data.data.pose[:2]],
                                                        [ROBOT_RADIUS +  SECURITY_DISTANCE.competitor],
                                                        max_speed=self.config.max_speed,
                                                        scale_factor=5)
-            combined_v += v_escape
+            v_dict.escape_from_police += v_escape
         #v_temp=combined_v.copy()
         #if self.frame_id%1000 ==0:
         #    print(self.name, "avoid police: ", v_escape)
         # Avoid hitting walls
+        v_dict.avoid_hitting_walls = np.zeros(2, dtype=np.float32)
         for obstacle in self.global_config.obstacles:
             if obstacle.params.type == 'square_wall':
                 v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
-                combined_v += v_avoid
+                v_dict.avoid_hitting_walls += v_avoid
         #if self.frame_id%1000 ==0:
         #    print(self.name, "avoid wall: ", combined_v - v_temp)
         #print(self.name, "cylinder: ")
@@ -275,9 +289,16 @@ class Baddy(RobotAbstract):
                                                   [ROBOT_RADIUS + obs.data.radius + SECURITY_DISTANCE.obstacle for obs in observations.values() if
                                                    obs.type == 'cylinder'],
                                                   max_speed=self.config.max_speed)
-        combined_v += v_avoid
-  
-        
+        v_dict.avoid_hitting_obstacles = v_avoid
+
+        combined_v = np.zeros(2, dtype=np.float32)
+        print('====', self.name, ' start====')
+        for v_description, v_value in v_dict.items():
+            print(v_description, v_value, get_magnitude(v_value))
+            combined_v += v_value
+        print('combined:', combined_v, get_magnitude(combined_v))
+        print('====', self.name, ' end====')
+
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
 
@@ -348,8 +369,8 @@ class PoseEstimator():
             mean_t1 = self.distribution_dict[name].mean
             variance_t1 = self.distribution_dict[name].variance
             while remaining_step > 0:
-                rotation_matrix = np.array([[np.cos(mean_t1[YAW]), -np.sin(mean_t1[YAW]), 0],
-                                            [np.sin(mean_t1[YAW]), np.cos(mean_t1[YAW]), 0],
+                rotation_matrix = np.array([[np.cos(mean_t1[YAW]), np.sin(mean_t1[YAW]), 0],
+                                            [-np.sin(mean_t1[YAW]), np.cos(mean_t1[YAW]), 0],
                                             [0, 0, 1]], dtype=np.float32)
 
                 # v and w in robot frame
@@ -407,6 +428,8 @@ class PoseEstimator():
 def avoid(distance):
     return max(0, 0.5 - np.exp(0.05 - distance))
 
+def get_magnitude(x):
+    return np.sqrt(np.sum(x**2))
 
 def braitenberg(front, front_left, front_right, left, right):
     u = 0.  # [m/s]
