@@ -532,7 +532,7 @@ def get_velocity_to_avoid_walls(position, wall_config, max_speed,
             if distance >5:
                 return np.zeros(2)
             # Compute the decay factor in the range of [0, 1]
-            decay_factor = np.exp(- max(0, (distance - 1 )**4) * scale_factor)
+            decay_factor = np.exp(- max(0, (distance - 1.5 )**3) * scale_factor)
             # Assign amplitude
             amplitude = decay_factor * max_speed
             return direction * amplitude
