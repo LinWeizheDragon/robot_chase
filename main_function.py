@@ -134,13 +134,13 @@ if __name__ == '__main__':
                 'name': 'robot1',
                 'type': 'police',
                 'epsilon': 0.2,
-                'max_speed': 0.6,
+                'max_speed': 0.4,
             },
             {
                 'name': 'robot2',
                 'type': 'police',
                 'epsilon': 0.2,
-                'max_speed': 0.6,
+                'max_speed': 0.4,
             },
             {
                 'name': 'robot3',

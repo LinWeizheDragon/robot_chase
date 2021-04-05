@@ -159,7 +159,7 @@ class Police(RobotAbstract):
             v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
                                                           [police_data.data.pose[:2]],
                                                           [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
-                                                          max_speed=self.config.max_speed,
+                                                          max_speed=self.config.max_speed*2,
                                                           scale_factor=10)
 
         # avoid hitting other captured baddies
@@ -170,7 +170,7 @@ class Police(RobotAbstract):
             v_dict.avoid_hitting_captured_baddies += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
                                                           [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.obstacle],
-                                                          max_speed=self.config.max_speed,
+                                                          max_speed=self.config.max_speed*2,
                                                           scale_factor=10)
 
         # If has a target baddy
@@ -183,7 +183,7 @@ class Police(RobotAbstract):
             # goal_position = baddies[self.current_target].data[:2]
             v_chase_baddy = get_velocity_to_reach_goal(point_position,
                                                        goal_position,
-                                                       max_speed=self.config.max_speed)
+                                                       max_speed=self.config.max_speed*3)
             v_dict.chase_baddy = v_chase_baddy
 
         # Avoid hitting walls
@@ -198,16 +198,16 @@ class Police(RobotAbstract):
                                                    obs.type == 'cylinder'],
                                                   [ROBOT_RADIUS + obs.data.radius + SECURITY_DISTANCE.obstacle for obs in observations.values() if
                                                    obs.type == 'cylinder'],
-                                                  max_speed=self.config.max_speed)
+                                                  max_speed=self.config.max_speed*2)
         v_dict.avoid_hitting_obstacles = v_avoid
 
         combined_v = np.zeros(2, dtype=np.float32)
-        print('====', self.name, ' start====')
+        #print('====', self.name, ' start====')
         for v_description, v_value in v_dict.items():
-            print(v_description, v_value, get_magnitude(v_value))
+        #    print(v_description, v_value, get_magnitude(v_value))
             combined_v += v_value
-        print('combined:', combined_v, get_magnitude(combined_v))
-        print('====', self.name, ' end====')
+        #print('combined:', combined_v, get_magnitude(combined_v))
+        #print('====', self.name, ' end====')
 
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
@@ -258,7 +258,7 @@ class Baddy(RobotAbstract):
             v_dict.avoid_hitting_baddies += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
                                                           [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
-                                                          max_speed=self.config.max_speed,
+                                                          max_speed=self.config.max_speed*2,
                                                           scale_factor=10)
         #if self.frame_id%1000 ==0:
         #    print(self.name, "other baddy: ", combined_v)
@@ -268,36 +268,35 @@ class Baddy(RobotAbstract):
             v_escape = get_velocity_to_avoid_obstacles(point_position,
                                                        [police_data.data.pose[:2]],
                                                        [ROBOT_RADIUS +  SECURITY_DISTANCE.competitor],
-                                                       max_speed=self.config.max_speed,
+                                                       max_speed=self.config.max_speed*3,
                                                        scale_factor=5)
             v_dict.escape_from_police += v_escape
-        #v_temp=combined_v.copy()
-        #if self.frame_id%1000 ==0:
-        #    print(self.name, "avoid police: ", v_escape)
+
         # Avoid hitting walls
         v_dict.avoid_hitting_walls = np.zeros(2, dtype=np.float32)
         for obstacle in self.global_config.obstacles:
             if obstacle.params.type == 'square_wall':
-                v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
+                v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed*5)
                 v_dict.avoid_hitting_walls += v_avoid
-        #if self.frame_id%1000 ==0:
-        #    print(self.name, "avoid wall: ", combined_v - v_temp)
-        #print(self.name, "cylinder: ")
+        #if self.name == 'robot3' and self.frame_id%1000000 ==0:
+            #print(v_dict.avoid_hitting_walls,v_dict.escape_from_police)
+
         v_avoid = get_velocity_to_avoid_obstacles(point_position,
                                                   [obs.data.position for obs in observations.values() if
                                                    obs.type == 'cylinder'],
                                                   [ROBOT_RADIUS + obs.data.radius + SECURITY_DISTANCE.obstacle for obs in observations.values() if
                                                    obs.type == 'cylinder'],
-                                                  max_speed=self.config.max_speed)
+                                                  max_speed=self.config.max_speed*2)
         v_dict.avoid_hitting_obstacles = v_avoid
 
         combined_v = np.zeros(2, dtype=np.float32)
-        print('====', self.name, ' start====')
+        #print('====', self.name, ' start====')
         for v_description, v_value in v_dict.items():
-            print(v_description, v_value, get_magnitude(v_value))
+            #if self.frame_id%1000000 ==0:
+             #   print(self.name, v_description, v_value, get_magnitude(v_value))
             combined_v += v_value
-        print('combined:', combined_v, get_magnitude(combined_v))
-        print('====', self.name, ' end====')
+        #print('combined:', combined_v, get_magnitude(combined_v))
+        #print('====', self.name, ' end====')
 
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         return combined_v
@@ -524,14 +523,16 @@ def get_velocity_to_avoid_obstacles(position,
 
 
 def get_velocity_to_avoid_walls(position, wall_config, max_speed,
-                                scale_factor=0.05):
+                                scale_factor=1):
     # This function returns velocity to avoid hitting walls
     wall_data = wall_config.params
     v = np.zeros(2, dtype=np.float32)
     if wall_data.type == 'square_wall':
         def compute_velocity(distance, direction):
+            if distance >5:
+                return np.zeros(2)
             # Compute the decay factor in the range of [0, 1]
-            decay_factor = np.exp(- max(0, (distance - 5 )**2) * scale_factor)
+            decay_factor = np.exp(- max(0, (distance - 1 )**4) * scale_factor)
             # Assign amplitude
             amplitude = decay_factor * max_speed
             return direction * amplitude
