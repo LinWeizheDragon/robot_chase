@@ -126,8 +126,8 @@ class Police(RobotAbstract):
         # print('robot', self.name,
         #       'current pos', m.groundtruth_pose,
         #       'control signals', u, w)
-        if self.name == 'robot1':
-            print(self.name, v,u,w,np.cos(m.groundtruth_pose[YAW]), np.sin(m.groundtruth_pose[YAW]))
+        #if self.name == 'robot1':
+        #    print(self.name, v,u,w,np.cos(m.groundtruth_pose[YAW]), np.sin(m.groundtruth_pose[YAW]), m.groundtruth_pose[:2])
         return u, w, v
 
     def get_potential_field(self, point_position, observations):
@@ -258,7 +258,7 @@ class Baddy(RobotAbstract):
                                                        max_speed=self.config.max_speed,
                                                        scale_factor=5)
             combined_v += v_escape
-        #v_temp=combined_v
+        #v_temp=combined_v.copy()
         #if self.frame_id%1000 ==0:
         #    print(self.name, "avoid police: ", v_escape)
         # Avoid hitting walls
@@ -508,7 +508,7 @@ def get_velocity_to_avoid_walls(position, wall_config, max_speed,
     if wall_data.type == 'square_wall':
         def compute_velocity(distance, direction):
             # Compute the decay factor in the range of [0, 1]
-            decay_factor = np.exp(- (distance - 0.3) * scale_factor)
+            decay_factor = np.exp(- max(0, (distance - 3)) * scale_factor)
             # Assign amplitude
             amplitude = decay_factor * max_speed
             return direction * amplitude
