@@ -1,12 +1,9 @@
 # robot_chase
 
-run it with 
+## Start Environment
+run first
 ```
 roslaunch robot_chase main.launch
-```
-and in a separate tab run 
-```
-roslaunch robot_chase main_function.launch mode:=braitenberg
 ```
 to use the customized environment, set your ENVIRONMENT VARIABLE as:
 ```
@@ -17,3 +14,37 @@ open RViz using
 rosrun rviz rviz
 ```
 In ```File - Open Config ``` go to ```robot_chase/rviz/``` open ```velocity_view.rviz```
+
+## Run Experiments
+example debug run:
+```
+roslaunch robot_chase main_function.launch mode:=debug config:=debug max_speed:=0.8,0.8,0.4,0.4 strategy:=estimation visibility:=0,0,0,0
+```
+example test run:
+```
+roslaunch robot_chase main_function.launch mode:=test config:=debug max_speed:=0.8,0.8,0.4,0.4 strategy:=estimation visibility:=-1,-1,-1,-1 experiment_name:=test_experiment_name num_test:=3 velocity_component:=1,1,1,1,1,1,1
+```
+### Arguments
+```
+--mode:
+    debug: not saving experiment data, run only once
+    test: run multiple experiments
+--config:
+    config name. Add new configs in config.py
+--max_speed:
+    none: default - use values in config
+    [int, int, ...]: list of speed of robots. Assign in order.
+--strategy:
+    naive: chase the absolute position of baddies
+    estimation: chase the estimated pose
+--visibility:
+    none: default - use values in config
+    [int, int, ...]: list of visibility of robots. Assign in order. -1 for full vision.
+--experiment_name:
+    path name to save results
+--num_test:
+    int. number of experiments to run
+--velocity_component:
+    none: default - use values in config
+    [int, int, ...]: list of amplification on each velocity component. Assign in order, See config.py
+```

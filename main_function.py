@@ -7,6 +7,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import pickle
+import os
 import argparse
 import numpy as np
 import rospy
@@ -26,11 +28,23 @@ from laser_scanner import SimpleLaser
 from robotics_control import Police, Baddy, get_distance, get_unit_vector
 from constant import *
 from global_positioning import GroundtruthPose
+from config import get_config_by_name
+from std_srvs.srv import Empty
+from metrics import MetricsManager
+
+reset_simulation = rospy.ServiceProxy('/gazebo/reset_simulation', Empty)
+start_simulation = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
+pause_simulation = rospy.ServiceProxy('/gazebo/pause_physics', Empty)
 
 
-def run(config):
+def run(config, run_id=0):
+    '''
+    Run experiment
+    :param config: experiment global config
+    :param run_id: current run id
+    :return: log_data from metrics manager. See metrics.MetricsManager.get_log_data()
+    '''
     rospy.init_node('obstacle_avoidance')
-    # avoidance_method = globals()[args.mode]
 
     # Update control every 100 ms.
     rate_limiter = rospy.Rate(100)
@@ -69,8 +83,50 @@ def run(config):
     for robot in robot_intances:
         robot.set_instance_dict(instance_dict)
 
+    # Create metrics logger
+    metrics_manager = MetricsManager(configs)
+    metrics_manager.set_instance_dict(instance_dict)
+
+    # Start simulation automatically
+    reset_simulation()
+    print('simulation reset!')
+    start_simulation()
+
+    def save_experiments():
+        '''
+        Save experiment data to files
+        :return:
+        '''
+        print('start saving this experiment...')
+        experiment_data = EasyDict(
+            robot_data=[],
+            metrics_data=metrics_manager.get_log_data(),
+            config=config,
+        )
+        for robot in robot_intances:
+            experiment_data.robot_data.append(robot.history)
+
+        dir_path = os.path.join(
+            '../catkin_ws/src/robot_chase/experiments', config.experiment_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        save_path = os.path.join(dir_path, 'run_{}.pkl'.format(run_id))
+        with open(save_path, 'wb') as f:
+            pickle.dump(experiment_data, f)
+            print('experiment saved to {}'.format(save_path))
+
+    def lprint(*args):
+        '''
+        Print args while saving to metrics manager
+        :param args:
+        :return:
+        '''
+        print(*args)
+        metrics_manager.add_log(*args)
+
+
+    frame_id = 0
     while not rospy.is_shutdown():
-        frame_id = 0
         # Make sure all measurements are ready.
         if not all([robot.sensor.ready for robot in robot_intances]):
             rate_limiter.sleep()
@@ -97,7 +153,7 @@ def run(config):
                     # This police captures the baddy
                     police.add_capture(baddy.name)
                     baddy.get_captured_by(police.name)
-
+                    lprint(police.name, 'captured', baddy.name, 'at', police.current_position)
                 if baddy.free:
                     if dist < nearest_baddy[0]:
                         # This baddy is more close
@@ -105,99 +161,114 @@ def run(config):
 
             if nearest_baddy[1] is None:
                 # No free baddies
-                print('no free baddies running, stop the agent')
+                lprint('no free baddies running, stop all agents')
                 police.stop()
+                lprint('simulation finished!')
+
+                # finally update the states
+                metrics_manager.update(frame_id)
+
+                # Pause simulation
+                pause_simulation()
+
+                # Log necessary results
+                if config.mode == 'test':
+                    save_experiments()
+                return metrics_manager.get_log_data()
             else:
                 # simple strategy to chase the nearest baddy
                 if police.current_target == nearest_baddy[1].name:
                     pass
                 else:
-                    print(police.name, 'changed its target to', nearest_baddy[1].name)
+                    lprint(police.name, 'changed its target to', nearest_baddy[1].name)
                     police.set_target(nearest_baddy[1].name)
-        frame_id += 1
 
+        # update metrics every iteration
+        metrics_manager.update(frame_id)
+        frame_id += 1
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Runs obstacle avoidance')
-    parser.add_argument('--mode', action='store', default='braitenberg', help='Method.',
-                        choices=['braitenberg', 'rule_based'])
+    parser.add_argument('--mode', action='store', default='debug',
+                        help='debug for single run; test for running a few experiments',
+                        choices=['debug', 'test'])
+    parser.add_argument('--config', action='store', type=str, required=True,
+                        help='config name.')
+    parser.add_argument('--experiment_name', action='store',
+                        type=str, default='debug_experiment',
+                        help='path to save experiments.')
+    parser.add_argument('--num_test', action='store', type=str,
+                        default='1',
+                        help='num of test runs.')
+    parser.add_argument('--max_speed', type=str,
+                        help='list of max_speed that will be assigned to each robot (in order)')
+    parser.add_argument('--strategy', action='store', default='naive',
+                        help='chase strategy',
+                        choices=['naive', 'estimation'])
+    parser.add_argument('--velocity_component', type=str,
+                        help='list of velocity component.')
+    parser.add_argument('--visibility', action='store', type=str,
+                        default='',
+                        help='visibility of robots (in order)')
+
+
     args, unknown = parser.parse_known_args()
 
     print(args)
+    print('CWD:', os.getcwd())
     print("Python Version {}".format(str(sys.version).replace('\n', '')))
 
-    configs = {
-        'dt': 0.05,
-        'robots': [
-            {
-                'name': 'robot1',
-                'type': 'police',
-                'epsilon': 0.2,
-                'max_speed': 0.4,
-            },
-            {
-                'name': 'robot2',
-                'type': 'police',
-                'epsilon': 0.2,
-                'max_speed': 0.4,
-            },
-            {
-                'name': 'robot3',
-                'type': 'baddy',
-                'epsilon': 0.2,
-                'max_speed': 0.9,
-            },
-            {
-                'name': 'robot4',
-                'type': 'baddy',
-                'epsilon': 0.2,
-                'max_speed': 0.9,
-            },
-        ],
-        'obstacles': [
-            {
-                'name': 'cylinder1',
-                'params': {
-                    'type': 'cylinder',
-                    'position': np.array([3, 2], dtype=np.float32),
-                    'radius': 1.5,
-                }
-            },
-            {
-                'name': 'cylinder2',
-                'params': {
-                    'type': 'cylinder',
-                    'position': np.array([-1, -5.5], dtype=np.float32),
-                    'radius': 1.3,
-                }
-            },
-            {
-                'name': 'cylinder3',
-                'params': {
-                    'type': 'cylinder',
-                    'position': np.array([-4, 3.5], dtype=np.float32),
-                    'radius': 1.2,
-                }
-            },
-            {
-                'name': 'walls',
-                'params': {
-                    'type': 'square_wall',
-                    'position': np.array([-8.64, -8.64], dtype=np.float32),
-                    'dx': 8.64*2,
-                    'dy': 8.64*2,
-                }
-            }
-        ]
-    }
+    configs = get_config_by_name(config_name=args.config)
 
     configs = EasyDict(configs)
     configs.num_robots = len(configs.robots)
 
+    # Evaluate args, override params
+    mode = args.mode
+    if mode == 'debug':
+        num_test = 1
+    else:
+        num_test = int(args.num_test)
+    experiment_name = args.experiment_name
+    configs.experiment_name = experiment_name
+    configs.strategy = args.strategy
+    configs.mode = mode
+
+    if args.visibility != "none":
+        visibility_list = args.visibility.split(',')
+        assert len(visibility_list) == configs.num_robots
+        for i, robot_config in enumerate(configs.robots):
+            robot_config.visibility = float(visibility_list[i])
+
+    if args.max_speed != "none":
+        max_speed_list = args.max_speed.split(',')
+        assert len(max_speed_list) == configs.num_robots
+        for i, robot_config in enumerate(configs.robots):
+            robot_config.max_speed = float(max_speed_list[i])
+
+    if args.velocity_component != "none":
+        velocity_component_list = args.velocity_component.split(',')
+        assert len(velocity_component_list) == len(configs.velocity_component)
+        for i, component_key in enumerate(configs.velocity_component.keys()):
+            configs.velocity_component[component_key] = float(velocity_component_list[i])
+
     print(configs)
 
     try:
-        run(configs)
+        run_id = 0
+        all_success = []
+        while run_id<num_test:
+            try:
+                print('start running Experiment {} : {} / {}'.format(experiment_name, run_id+1, num_test))
+                result = run(configs, run_id)
+                run_id += 1
+                all_success.append(result.all_success)
+            except rospy.ROSTimeMovedBackwardsException:
+                print('catch ROSTimeMovedBackwardsException, ignore and restart!')
+                pass
+        all_success_rate = np.mean(np.array(all_success))
+        print('all experiments finished.')
+        print('all_success_rate', all_success_rate)
     except rospy.ROSInterruptException:
         pass

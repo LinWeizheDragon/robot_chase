@@ -1,5 +1,21 @@
 <launch>
 	<arg name="mode" />
-
-	<node pkg="robot_chase" type="main_function.py" name="main_function" args="--mode=$(arg mode)" output="screen"></node>
+	<arg name="experiment_name" default="default_experiment"/>
+	<arg name="num_test" default="1"/>
+    <arg name="config" default="none"/>
+    <arg name="max_speed" default="none"/>
+    <arg name="strategy" default="naive"/>
+    <arg name="visibility" default="none"/>
+    <arg name="velocity_component" default="none"/>
+	<node pkg="robot_chase" type="main_function.py" name="main_function"
+	args="--mode=$(arg mode)
+	--experiment_name=$(arg experiment_name)
+	--num_test=$(arg num_test)
+	--config=$(arg config)
+	--max_speed=$(arg max_speed)
+	--strategy $(arg strategy)
+	--velocity_component $(arg velocity_component)
+	--visibility $(arg visibility)
+	--end"
+	output="screen"></node>
 </launch>

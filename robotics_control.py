@@ -30,6 +30,13 @@ class RobotAbstract():
         self.pose_estimator = PoseEstimator(global_config=global_config,
                                             config=config)
 
+        self.history = EasyDict(
+            config=config,
+            measurements=[],
+            action=[],
+            pose_estimation=[],
+        )
+
     def set_instance_dict(self, instance_dict):
         self.instance_dict = instance_dict
 
@@ -38,7 +45,7 @@ class RobotAbstract():
 
     def action(self, frame_id):
         if self.terminate:
-            u, w = 0, 0
+            u, w, v = 0, 0, 0
             vel_msg = Twist()
             vel_msg.linear.x = u
             vel_msg.angular.z = w
@@ -80,6 +87,12 @@ class RobotAbstract():
         vel_msg.angular.z = w
         self.publisher.publish(vel_msg)
 
+        # log historical actions and measurements
+        self.history.action.append(EasyDict(u=u, w=w, v=v))
+        self.history.measurements.append(measurements)
+        self.history.pose_estimation.append(
+            self.pose_estimator.distribution_dict)
+
         pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
         generate_marker(self.marker_publisher, self.name, v, pose_msg, frame_id)
 
@@ -112,7 +125,8 @@ class Police(RobotAbstract):
 
     def add_capture(self, captured):
         print(self.name, 'captures', captured, 'at', self.current_position)
-        self.captured.union(captured)
+        self.captured.add(captured)
+        # print(self.name, self.captured)
 
     def controller(self, *args, **kwargs):
         # u, w = braitenberg(*args)
@@ -175,12 +189,17 @@ class Police(RobotAbstract):
 
         # If has a target baddy
         if self.current_target is not None:
-            goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
+
+            if self.global_config.strategy == 'naive':
+                goal_position = baddies[self.current_target].data.pose[:2]
+            elif self.global_config.strategy == 'estimation':
+                goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
                                                                        observations[self.current_target].data,
                                                                        step=30).mean
-            goal_position = goal_pose[:2]
+                goal_position = goal_pose[:2]
+
             generate_marker(self.goal_publisher, self.name, 0, goal_position, self.frame_id, goal=True)
-            # goal_position = baddies[self.current_target].data[:2]
+
             v_chase_baddy = get_velocity_to_reach_goal(point_position,
                                                        goal_position,
                                                        max_speed=self.config.max_speed*3)
@@ -222,7 +241,8 @@ class Baddy(RobotAbstract):
         self.capture_by = set()
 
     def get_captured_by(self, capture_by):
-        self.capture_by.union(capture_by)
+        self.capture_by.add(capture_by)
+        # print(self.name, self.capture_by)
         self.free = False
         self.stop()
 
