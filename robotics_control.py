@@ -158,7 +158,7 @@ class Police(RobotAbstract):
                 continue
             v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
                                                           [police_data.data.pose[:2]],
-                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
+                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
                                                           max_speed=self.config.max_speed*2,
                                                           scale_factor=10)
 
@@ -231,7 +231,11 @@ class Baddy(RobotAbstract):
         # laser_measurements = m.laser_measurements
         # u, w = braitenberg(*laser_measurements)
         v = self.get_potential_field(m.point_position, m.observations)
+        if np.linalg.norm(v) < 1e-2:
+           v = add_noise(v)
         u, w = feedback_linearized(m.groundtruth_pose, v, epsilon=self.config.epsilon)
+        
+
         return u, w, v
 
     def get_potential_field(self, point_position, observations):
@@ -257,7 +261,7 @@ class Baddy(RobotAbstract):
                 continue
             v_dict.avoid_hitting_baddies += get_velocity_to_avoid_obstacles(point_position,
                                                           [baddy_data.data.pose[:2]],
-                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companian],
+                                                          [ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
                                                           max_speed=self.config.max_speed*2,
                                                           scale_factor=10)
         #if self.frame_id%1000 ==0:
@@ -595,6 +599,9 @@ def feedback_linearized(pose, velocity, epsilon):
     u = velocity[0] * np.cos(pose[YAW]) + velocity[1] * np.sin(pose[YAW])
     w = 1 / epsilon * (-velocity[0] * np.sin(pose[YAW]) + velocity[1] * np.cos(pose[YAW]))
     return u, w
+
+def add_noise(v):
+     return v + 0.1* (np.random.random(size=2) - 0.5)
 
 
 def generate_pose_msg(pose_publisher, v, point_position, frame_id):
