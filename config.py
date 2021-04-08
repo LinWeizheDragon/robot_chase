@@ -7,6 +7,12 @@ def get_config_by_name(config_name):
         configs = {
             'dt': 0.1,
             'strategy': 'naive',
+            'corners': [
+                np.array([-8.64, -8.64]),
+                np.array([-8.64, 8.64]),
+                np.array([8.64, -8.64]),
+                np.array([8.64, 8.64]),
+            ],
             'velocity_component': {
                 'avoid_hitting_police': 1,
                 'avoid_hitting_captured_baddies': 1,
@@ -15,6 +21,7 @@ def get_config_by_name(config_name):
                 'avoid_hitting_obstacles': 1,
                 'avoid_hitting_baddies': 1,
                 'escape_from_police': 1,
+                'avoid_corners': 1,
             },
             'robots': [
                 {
