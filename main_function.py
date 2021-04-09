@@ -56,6 +56,8 @@ def run(config, run_id=0):
     police_intances = []
     baddy_instances = []
     instance_dict = {}
+    PositioningClass = GroundtruthPose
+    positioning = PositioningClass(config)
     for robot_index, robot in enumerate(config.robots):
 
         print(robot)
@@ -65,15 +67,15 @@ def run(config, run_id=0):
         goal_publisher = rospy.Publisher('/{}/goal'.format(robot.name), Marker, queue_size=5)
         if robot.type == 'police':
             RobotClass = Police
-            PositioningClass = GroundtruthPose
+            #PositioningClass = GroundtruthPose
             SensorClass = SimpleLaser
         else:
             RobotClass = Baddy
-            PositioningClass = GroundtruthPose
+            #PositioningClass = GroundtruthPose
             SensorClass = SimpleLaser
 
         sensor = SensorClass(robot)
-        positioning = PositioningClass(config, robot)
+        #positioning = PositioningClass(config, robot)
         robot_instance = RobotClass(velocity_publisher, pose_publisher, marker_publisher, goal_publisher, config, robot, sensor, positioning)
         robot_intances.append(robot_instance)
         instance_dict[robot.name] = robot_instance
@@ -216,7 +218,7 @@ def run(config, run_id=0):
         # time_elapsed = time.time() - current_time
         # print('time passed:', time_elapsed)
         # current_time = time.time()
-        # rate_limiter.sleep()
+        rate_limiter.sleep()
         # time_elapsed = time.time() - current_time
         # print('sleep for:', time_elapsed)
 
