@@ -23,6 +23,7 @@ roslaunch robot_chase main_function.launch mode:=debug config:=debug max_speed:=
 example test run:
 ```
 roslaunch robot_chase main_function.launch mode:=test config:=debug max_speed:=0.8,0.8,0.4,0.4 strategy:=estimation visibility:=0,0,0,0 experiment_name:=test_experiment_name num_test:=3 velocity_component:=1,1,1,1,1,1,1,1
+roslaunch robot_chase main_function.launch mode:=test config:=2police2baddy max_speed:=0.8,0.8,0.4,0.4 strategy:=estimation visibility:=0,0,0,0 experiment_name:=2police2baddy_estimation_test num_test:=3 velocity_component:=1,1,1,1,1,1,1,1
 ```
 ### Arguments
 ```
