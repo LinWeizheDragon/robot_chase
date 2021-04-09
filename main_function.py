@@ -15,6 +15,8 @@ import rospy
 import sys
 from easydict import EasyDict
 from visualization_msgs.msg import Marker
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelState
 # Robot motion commands:
 # http://docs.ros.org/api/geometry_msgs/html/msg/Twist.html
 from geometry_msgs.msg import Twist, PoseStamped
@@ -25,6 +27,7 @@ from gazebo_msgs.msg import ModelStates
 from tf.transformations import euler_from_quaternion
 
 from laser_scanner import SimpleLaser
+from get_random_init import initial_position
 from robotics_control import Police, Baddy, get_distance, get_unit_vector
 from constant import *
 from global_positioning import GroundtruthPose
@@ -89,6 +92,14 @@ def run(config, run_id=0):
 
     # Start simulation automatically
     reset_simulation()
+    state_mgses, config = initial_position(config, run_id)
+    rospy.wait_for_service('/gazebo/set_model_state')
+    try:
+        set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
+        for msg in state_mgses:
+            resp = set_state( msg )
+    except rospy.ServiceException, e:
+        print ("Service call failed: %s" % e)
     print('simulation reset!')
     start_simulation()
 
@@ -159,7 +170,7 @@ def run(config, run_id=0):
                         # This baddy is more close
                         nearest_baddy = (dist, baddy)
 
-            if nearest_baddy[1] is None:
+            if nearest_baddy[1] is None or frame_id > 1e5:
                 # No free baddies
                 lprint('no free baddies running, stop all agents')
                 police.stop()
