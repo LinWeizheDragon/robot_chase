@@ -27,8 +27,8 @@ class RobotAbstract():
         self.config = config
         self.frame_id = 0
         self.terminate = False
-        #self.pose_estimator = PoseEstimator(global_config=global_config,
-                                            #config=config)
+        self.pose_estimator = PoseEstimator(global_config=global_config,
+                                            config=config)
 
         self.history = EasyDict(
             config=config,
@@ -70,7 +70,7 @@ class RobotAbstract():
         # print('other observations', groundtruth.perceived_poses)
 
         # Process observations using PoseEsimator
-        #self.pose_estimator.process_observations(observations)
+        self.pose_estimator.process_observations(observations)
 
         # Pass measurements to controller
         measurements = EasyDict(point_position=point_position,
@@ -90,8 +90,8 @@ class RobotAbstract():
         # log historical actions and measurements
         self.history.action.append(EasyDict(u=u, w=w, v=v))
         self.history.measurements.append(measurements)
-        #self.history.pose_estimation.append(
-            #self.pose_estimator.distribution_dict)
+        self.history.pose_estimation.append(
+            self.pose_estimator.distribution_dict)
 
         pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
         generate_marker(self.marker_publisher, self.name, v, pose_msg, frame_id)
