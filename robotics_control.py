@@ -94,7 +94,8 @@ class RobotAbstract():
             self.pose_estimator.distribution_dict)
 
         pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
-        generate_marker(self.marker_publisher, self.name, v, pose_msg, frame_id)
+        generate_marker(self.marker_publisher, self.name,
+                        '{} ({})   {} ({})'.format(round(u,2), round(get_magnitude(linear), 2), round(w,2), round(get_magnitude(angular), 2)), pose_msg, frame_id)
 
     def stop(self):
         self.terminate = True
@@ -152,6 +153,7 @@ class Police(RobotAbstract):
         #    self.name,
         #    self.pose_estimator.distribution_dict
         # )
+        # print('====', self.name, ' start====')
         baddy_names = [robot.name for robot in self.global_config.robots if
                        (robot.type == 'baddy' and robot.name not in self.captured)]
         police_names = [robot.name for robot in self.global_config.robots if robot.type == 'police']
@@ -232,9 +234,9 @@ class Police(RobotAbstract):
         v_dict.avoid_hitting_obstacles = v_avoid
 
         combined_v = np.zeros(2, dtype=np.float32)
-        # print('====', self.name, ' start====')
+
         for v_description, v_value in v_dict.items():
-            #    print(v_description, v_value, get_magnitude(v_value))
+            # print(v_description, v_value, get_magnitude(v_value))
             combined_v += v_value * self.global_config.velocity_component[v_description]
         # print('combined:', combined_v, get_magnitude(combined_v))
         # print('====', self.name, ' end====')
@@ -694,7 +696,7 @@ def generate_marker(marker_publisher, robot_name, v, pose, frame_id, goal=False)
         marker.color.g = 1.0
         marker.color.b = 0.5
     else:
-        marker.text = 'R{}: {}'.format(robot_name[-1], round(np.linalg.norm(v), 2))
+        marker.text = 'R{}: {}'.format(robot_name[-1], v)
         # marker.text = 'R{}: {}'.format(robot_name[-1], pose.pose.position)
         marker.pose.position = pose.pose.position
         marker.color.r = 1.0

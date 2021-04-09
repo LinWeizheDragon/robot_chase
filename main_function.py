@@ -50,7 +50,7 @@ def run(config, run_id=0):
     rospy.init_node('obstacle_avoidance')
 
     # Update control every 100 ms.
-    rate_limiter = rospy.Rate(100)
+    rate_limiter = rospy.Rate(50)
 
     robot_intances = []
     police_intances = []
@@ -137,7 +137,10 @@ def run(config, run_id=0):
 
 
     frame_id = 0
+    import time
+    start_time = rospy.get_rostime()
     while not rospy.is_shutdown():
+        current_time = rospy.get_rostime()
         # Make sure all measurements are ready.
         if not all([robot.sensor.ready for robot in robot_intances]):
             rate_limiter.sleep()
@@ -146,9 +149,9 @@ def run(config, run_id=0):
             rate_limiter.sleep()
             continue
 
-        if frame_id > config.timeout:
+        if (current_time - start_time).to_sec() > config.timeout:
             # timeout
-            lprint('simulation finished!')
+            lprint('TIMEOUT!!!!! simulation finished!')
 
             # Pause simulation
             pause_simulation()
@@ -210,6 +213,12 @@ def run(config, run_id=0):
         # update metrics every iteration
         metrics_manager.update(frame_id)
         frame_id += 1
+        # time_elapsed = time.time() - current_time
+        # print('time passed:', time_elapsed)
+        # current_time = time.time()
+        # rate_limiter.sleep()
+        # time_elapsed = time.time() - current_time
+        # print('sleep for:', time_elapsed)
 
 
 if __name__ == '__main__':
@@ -236,8 +245,8 @@ if __name__ == '__main__':
                         default='',
                         help='visibility of robots (in order)')
     parser.add_argument('--timeout', action='store', type=str,
-                        default='600',
-                        help='number of frames to stop')
+                        default='90',
+                        help='timeout in seconds')
 
     args, unknown = parser.parse_known_args()
 
