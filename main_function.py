@@ -6,7 +6,7 @@ Main functions
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
+import json
 import pickle
 import os
 import argparse
@@ -98,7 +98,7 @@ def run(config, run_id=0):
         set_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
         for msg in state_mgses:
             resp = set_state( msg )
-    except rospy.ServiceException, e:
+    except rospy.ServiceException as e:
         print ("Service call failed: %s" % e)
     print('simulation reset!')
     start_simulation()
@@ -146,6 +146,19 @@ def run(config, run_id=0):
             rate_limiter.sleep()
             continue
 
+        if frame_id > config.timeout:
+            # timeout
+            lprint('simulation finished!')
+
+            # Pause simulation
+            pause_simulation()
+
+            # Log necessary results
+            if config.mode == 'test':
+                save_experiments()
+            return metrics_manager.get_log_data()
+
+
         for i, robot in enumerate(robot_intances):
             robot.action(frame_id)
 
@@ -170,7 +183,7 @@ def run(config, run_id=0):
                         # This baddy is more close
                         nearest_baddy = (dist, baddy)
 
-            if nearest_baddy[1] is None or frame_id > 1e5:
+            if nearest_baddy[1] is None:
                 # No free baddies
                 lprint('no free baddies running, stop all agents')
                 police.stop()
@@ -222,7 +235,9 @@ if __name__ == '__main__':
     parser.add_argument('--visibility', action='store', type=str,
                         default='',
                         help='visibility of robots (in order)')
-
+    parser.add_argument('--timeout', action='store', type=str,
+                        default='600',
+                        help='number of frames to stop')
 
     args, unknown = parser.parse_known_args()
 
@@ -234,6 +249,7 @@ if __name__ == '__main__':
 
     configs = EasyDict(configs)
     configs.num_robots = len(configs.robots)
+    configs.timeout = int(args.timeout)
 
     # Evaluate args, override params
     mode = args.mode
@@ -278,8 +294,24 @@ if __name__ == '__main__':
             except rospy.ROSTimeMovedBackwardsException:
                 print('catch ROSTimeMovedBackwardsException, ignore and restart!')
                 pass
+
+        # Processing and output result metrics
         all_success_rate = np.mean(np.array(all_success))
         print('all experiments finished.')
         print('all_success_rate', all_success_rate)
+
+        dir_path = os.path.join(
+            '../catkin_ws/src/robot_chase/experiments', configs.experiment_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        save_path = os.path.join(dir_path, 'metrics.json'.format(run_id))
+        with open(save_path, 'w') as f:
+            json.dump({
+                'all_success': all_success,
+                'all_success_rate': all_success_rate,
+                'num_test': num_test
+            }, f, indent=4)
+            print('all experiments saved to {}'.format(save_path))
+
     except rospy.ROSInterruptException:
         pass

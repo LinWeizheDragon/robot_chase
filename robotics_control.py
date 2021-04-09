@@ -174,9 +174,9 @@ class Police(RobotAbstract):
                                                                            [police_data.data.pose[:2]],
                                                                            [
                                                                                ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
-                                                                           max_speed=self.config.max_speed * 2,
+                                                                           max_speed=self.config.max_speed,
                                                                            scale_factor=10,
-                                                                           prune_distance=1)
+                                                                           prune_distance=0.5)
 
         # avoid hitting other captured baddies
         v_dict.avoid_hitting_captured_baddies = np.zeros(2, dtype=np.float32)
