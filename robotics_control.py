@@ -54,19 +54,19 @@ class RobotAbstract():
             return
 
         # First process measurements and observations
-        groundtruth = self.positioning
+        groundtruth = self.positioning.pose(self.name)
         EPSILON = self.config.epsilon
 
         # Get absolute positioning
         absolute_point_position = np.array([
-            groundtruth.pose[X] + EPSILON * np.cos(groundtruth.pose[YAW]),
-            groundtruth.pose[Y] + EPSILON * np.sin(groundtruth.pose[YAW])], dtype=np.float32)
+            groundtruth[X] + EPSILON * np.cos(groundtruth[YAW]),
+            groundtruth[Y] + EPSILON * np.sin(groundtruth[YAW])], dtype=np.float32)
 
         point_position = absolute_point_position
         goal_position = GOAL_POSITION
-        pose = groundtruth.pose
+        pose = groundtruth
         laser_measurements = self.sensor.measurements
-        observations = groundtruth.perceived_poses
+        observations = self.positioning.perceived_poses
         # print('other observations', groundtruth.perceived_poses)
 
         # Process observations using PoseEsimator
@@ -105,7 +105,7 @@ class RobotAbstract():
 
     @property
     def current_position(self):
-        return self.positioning.pose
+        return self.positioning.pose(self.name)
 
 
 class Police(RobotAbstract):
