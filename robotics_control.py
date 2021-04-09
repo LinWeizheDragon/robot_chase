@@ -27,8 +27,8 @@ class RobotAbstract():
         self.config = config
         self.frame_id = 0
         self.terminate = False
-        self.pose_estimator = PoseEstimator(global_config=global_config,
-                                            config=config)
+        #self.pose_estimator = PoseEstimator(global_config=global_config,
+                                            #config=config)
 
         self.history = EasyDict(
             config=config,
@@ -54,23 +54,23 @@ class RobotAbstract():
             return
 
         # First process measurements and observations
-        groundtruth = self.positioning
+        groundtruth = self.positioning.pose(self.name)
         EPSILON = self.config.epsilon
 
         # Get absolute positioning
         absolute_point_position = np.array([
-            groundtruth.pose[X] + EPSILON * np.cos(groundtruth.pose[YAW]),
-            groundtruth.pose[Y] + EPSILON * np.sin(groundtruth.pose[YAW])], dtype=np.float32)
+            groundtruth[X] + EPSILON * np.cos(groundtruth[YAW]),
+            groundtruth[Y] + EPSILON * np.sin(groundtruth[YAW])], dtype=np.float32)
 
         point_position = absolute_point_position
         goal_position = GOAL_POSITION
-        pose = groundtruth.pose
+        pose = groundtruth
         laser_measurements = self.sensor.measurements
-        observations = groundtruth.perceived_poses
+        observations = self.positioning.perceived_poses
         # print('other observations', groundtruth.perceived_poses)
 
         # Process observations using PoseEsimator
-        self.pose_estimator.process_observations(observations)
+        #self.pose_estimator.process_observations(observations)
 
         # Pass measurements to controller
         measurements = EasyDict(point_position=point_position,
@@ -90,8 +90,8 @@ class RobotAbstract():
         # log historical actions and measurements
         self.history.action.append(EasyDict(u=u, w=w, v=v))
         self.history.measurements.append(measurements)
-        self.history.pose_estimation.append(
-            self.pose_estimator.distribution_dict)
+        #self.history.pose_estimation.append(
+            #self.pose_estimator.distribution_dict)
 
         pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
         generate_marker(self.marker_publisher, self.name, v, pose_msg, frame_id)
@@ -105,7 +105,7 @@ class RobotAbstract():
 
     @property
     def current_position(self):
-        return self.positioning.pose
+        return self.positioning.pose(self.name)
 
 
 class Police(RobotAbstract):
