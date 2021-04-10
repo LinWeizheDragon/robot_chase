@@ -1,5 +1,6 @@
 import numpy as np
 from easydict import EasyDict
+import rospy
 
 class MetricsManager():
     def __init__(self, config):
@@ -9,6 +10,7 @@ class MetricsManager():
         self.capture_history = []
         self.logs = []
         self.frame_id = 0
+        self.last_update_timestamp = rospy.get_rostime()
 
     def get_log_data(self):
         '''
@@ -32,6 +34,7 @@ class MetricsManager():
         return EasyDict(
             logs=self.logs,
             total_frames=self.frame_id,
+            total_time=rospy.get_rostime().to_sec(),
             capture_history=self.capture_history,
             all_success=self.all_success,
         )
@@ -45,7 +48,7 @@ class MetricsManager():
         :param args: a sequence of args, as in print()
         :return:
         '''
-        self.logs.append((self.frame_id, args))
+        self.logs.append((rospy.get_rostime().to_sec(), self.frame_id, args))
 
     def update(self, frame_id):
         '''
@@ -54,7 +57,9 @@ class MetricsManager():
         :return:
         '''
         self.frame_id = frame_id
+        self.last_update_timestamp = rospy.get_rostime()
         current_state = EasyDict(
+            timestamp=rospy.get_rostime().to_sec(),
             police={},
             baddies={},
         )

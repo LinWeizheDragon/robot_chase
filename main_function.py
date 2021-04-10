@@ -88,9 +88,6 @@ def run(config, run_id=0):
     for robot in robot_intances:
         robot.set_instance_dict(instance_dict)
 
-    # Create metrics logger
-    metrics_manager = MetricsManager(configs)
-    metrics_manager.set_instance_dict(instance_dict)
 
     # Start simulation automatically
     reset_simulation()
@@ -103,7 +100,13 @@ def run(config, run_id=0):
     except rospy.ServiceException as e:
         print ("Service call failed: %s" % e)
     print('simulation reset!')
+
+
     start_simulation()
+
+    # Create metrics logger
+    metrics_manager = MetricsManager(configs)
+    metrics_manager.set_instance_dict(instance_dict)
 
     def save_experiments():
         '''
@@ -212,8 +215,13 @@ def run(config, run_id=0):
                     lprint(police.name, 'changed its target to', nearest_baddy[1].name)
                     police.set_target(nearest_baddy[1].name)
 
-        # update metrics every iteration
-        metrics_manager.update(frame_id)
+        # print(type(current_time), type(metrics_manager.last_update_timestamp))
+        # print((current_time - metrics_manager.last_update_timestamp).to_sec())
+        if (current_time - metrics_manager.last_update_timestamp).to_sec() > 0.5:
+            # every 0.5 second update the metrics
+            # print('update metrics!')
+            metrics_manager.update(frame_id)
+
         frame_id += 1
         # time_elapsed = time.time() - current_time
         # print('time passed:', time_elapsed)
