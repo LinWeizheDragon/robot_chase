@@ -36,10 +36,10 @@ def is_valid(pose):
 
 
 def random_pose():
-    pose = np.random.uniform(low = -WALL_POSITION, high = WALL_POSITION, size = 2)
+    pose = np.random.uniform(low = -WALL_POSITION * 0.95, high = WALL_POSITION * 0.95, size = 2)
     
     while not is_valid(pose):
-        pose = np.random.uniform(low = -WALL_POSITION, high = WALL_POSITION, size = 2)
+        pose = np.random.uniform(low = -WALL_POSITION * 0.95, high = WALL_POSITION * 0.95, size = 2)
     return pose
 
 def distant_poses(config):

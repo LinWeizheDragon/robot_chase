@@ -16,9 +16,9 @@ def get_config_by_name(config_name):
             'velocity_component': {
                 'avoid_hitting_police': 1,
                 'avoid_hitting_captured_baddies': 1,
+                'avoid_hitting_obstacles': 1,
                 'chase_baddy': 1,
                 'avoid_hitting_walls': 1,
-                'avoid_hitting_obstacles': 1,
                 'avoid_hitting_baddies': 1,
                 'escape_from_police': 1,
                 'avoid_corners': 1,
