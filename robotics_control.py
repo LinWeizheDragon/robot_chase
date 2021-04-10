@@ -29,6 +29,8 @@ class RobotAbstract():
         self.terminate = False
         self.pose_estimator = PoseEstimator(global_config=global_config,
                                             config=config)
+        self.maintain_target_counter = 0
+        self.maintain_target = None
 
         self.history = EasyDict(
             config=config,
@@ -80,6 +82,10 @@ class RobotAbstract():
                                 laser_measurements=laser_measurements)
 
         u, w, v = self.controller(measurements=measurements)
+        # if w < -0.4:
+        #     w = -0.4
+        # if w > 0.4:
+        #     w = 0.4
         # measurements = self.sensor.measurements
         # u, w = self.controller(*measurements)
         vel_msg = Twist()
@@ -195,14 +201,19 @@ class Police(RobotAbstract):
 
         # If has a target baddy
         if self.current_target is not None:
-
-            if self.global_config.strategy == 'naive':
-                goal_position = baddies[self.current_target].data.pose[:2]
-            elif self.global_config.strategy == 'estimation':
-                goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
-                                                                           observations[self.current_target].data,
-                                                                           step=30).mean
-                goal_position = goal_pose[:2]
+            if self.maintain_target_counter == 0:
+                if self.global_config.strategy == 'naive':
+                    goal_position = baddies[self.current_target].data.pose[:2]
+                elif self.global_config.strategy == 'estimation':
+                    goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
+                                                                               observations[self.current_target].data,
+                                                                               step=30).mean
+                    goal_position = goal_pose[:2]
+                self.maintain_target_counter = 10
+                self.maintain_target = goal_position
+            else:
+                self.maintain_target_counter -= 1
+                goal_position = self.maintain_target
 
             generate_marker(self.goal_publisher, self.name, 0, goal_position, self.frame_id, goal=True)
 
