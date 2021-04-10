@@ -166,9 +166,9 @@ def run(config, run_id=0):
                 save_experiments()
             return metrics_manager.get_log_data()
 
-
+        save = (current_time - metrics_manager.last_update_timestamp).to_sec() > 0.5
         for i, robot in enumerate(robot_intances):
-            robot.action(frame_id)
+            robot.action(frame_id, save=save)
 
         # Conduct strategy
         for i, police in enumerate(police_intances):
@@ -217,7 +217,8 @@ def run(config, run_id=0):
 
         # print(type(current_time), type(metrics_manager.last_update_timestamp))
         # print((current_time - metrics_manager.last_update_timestamp).to_sec())
-        if (current_time - metrics_manager.last_update_timestamp).to_sec() > 0.5:
+
+        if save:
             # every 0.5 second update the metrics
             # print('update metrics!')
             metrics_manager.update(frame_id)

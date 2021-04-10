@@ -51,6 +51,9 @@ class GroundtruthPose(object):
     def pose(self, name):
         return self.all_pose[name]['data']['pose']
 
+    def twist(self, name):
+        return self.all_pose[name]['data']['twist']
+
     @property
     def perceived_poses(self):
         # This is all other objects poses that it can perceive

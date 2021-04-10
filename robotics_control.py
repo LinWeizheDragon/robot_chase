@@ -45,7 +45,7 @@ class RobotAbstract():
     def get_instance_by_name(self, name):
         return self.instance_dict.get(name, None)
 
-    def action(self, frame_id):
+    def action(self, frame_id, save=False):
         if self.terminate:
             u, w, v = 0, 0, 0
             vel_msg = Twist()
@@ -93,15 +93,24 @@ class RobotAbstract():
         vel_msg.angular.z = w
         self.publisher.publish(vel_msg)
 
-        # log historical actions and measurements
-        self.history.action.append(EasyDict(u=u, w=w, v=v))
-        self.history.measurements.append(measurements)
-        self.history.pose_estimation.append(
-            self.pose_estimator.distribution_dict)
+        twist = self.positioning.twist(self.name)
+        speed = get_magnitude(
+            np.array([twist.linear.x, twist.linear.y, twist.linear.z])
+        )
+        rotate_speed = twist.angular.z
+        if save:
+            # log historical actions and measurements
+            self.history.action.append(EasyDict(u=u, w=w, v=v))
+            self.history.measurements.append(measurements)
+            self.history.pose_estimation.append(
+                self.pose_estimator.distribution_dict)
 
         pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
         generate_marker(self.marker_publisher, self.name,
-                        '{}   {}'.format(round(u,2), round(w,2)), pose_msg, frame_id)
+                        'v={} [T: {}]  w={} [T: {}]'.format(round(speed,2),
+                                                            round(u,2),
+                                                            round(rotate_speed,2),
+                                                            round(w,2)), pose_msg, frame_id)
 
     def stop(self):
         self.terminate = True
@@ -200,6 +209,10 @@ class Police(RobotAbstract):
                                                                                      prune_distance=0.5)
 
         # If has a target baddy
+        twist = self.positioning.twist(self.name)
+        linear = np.array([twist.linear.x, twist.linear.y, twist.linear.z])
+        speed = get_magnitude(linear)
+
         if self.current_target is not None:
             if self.maintain_target_counter == 0:
                 if self.global_config.strategy == 'naive':
@@ -209,8 +222,23 @@ class Police(RobotAbstract):
                                                                                observations[self.current_target].data,
                                                                                step=30).mean
                     goal_position = goal_pose[:2]
-                self.maintain_target_counter = 10
+
                 self.maintain_target = goal_position
+                self.maintain_target_counter = 10
+                if speed < 0.2:
+                    self.maintain_target_counter += 100
+
+                # if self.maintain_target is None:
+                #     self.maintain_target = goal_position
+                #     self.maintain_target_counter = 100
+                # else:
+                #     if linear < 0.2:
+                #         self.maintain_target_counter = 500
+                #         goal_position = self.maintain_target
+                #     else:
+                #         self.maintain_target_counter = 10
+                #         self.maintain_target = goal_position
+
             else:
                 self.maintain_target_counter -= 1
                 goal_position = self.maintain_target
