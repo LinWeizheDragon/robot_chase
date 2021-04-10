@@ -47,5 +47,8 @@ roslaunch robot_chase main_function.launch mode:=test config:=2police2baddy max_
     int. number of experiments to run
 --velocity_component:
     none: default - use values in config
-    [int, int, ...]: list of amplification on each velocity component. Assign in order, See config.py
+    [int, int, ...]: list of amplification on each velocity component. 
+    Assign in order, chase_baddy, avoid_corners, avoid_hitting_obstacles, 
+    avoid_hitting_police, avoid_hitting_baddies, avoid_hitting_captured_baddies, 
+    avoid_hitting_walls, escape_from_police
 ```

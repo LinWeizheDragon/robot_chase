@@ -182,14 +182,19 @@ class Police(RobotAbstract):
         # print('====', self.name, ' start====')
         baddy_names = [robot.name for robot in self.global_config.robots if
                        (robot.type == 'baddy' and robot.name not in self.captured)]
+        baddy_captured = [robot.name for robot in self.global_config.robots if
+                       (robot.type == 'baddy' and robot.name in self.captured)]
         police_names = [robot.name for robot in self.global_config.robots if robot.type == 'police']
         baddies = {}
         police = {}
+        captured = {}
         for obj_name, obj in observations.items():
-            if obj_name in baddy_names:
-                baddies[obj_name] = obj
-            elif obj_name in police_names:
+            if obj_name in police_names:
                 police[obj_name] = obj
+            elif obj_name in baddy_names:
+                baddies[obj_name] = obj
+            elif obj_name in baddy_captured:
+                captured[obj_name] = obj
 
         v_dict = EasyDict()
 
@@ -208,15 +213,13 @@ class Police(RobotAbstract):
 
         # avoid hitting other captured baddies
         v_dict.avoid_hitting_captured_baddies = np.zeros(2, dtype=np.float32)
-        for baddy_name, baddy_data in baddies.items():
-            if self.get_instance_by_name(baddy_name).free:
-                continue
+        for baddy_name, baddy_data in captured.items():
             v_dict.avoid_hitting_captured_baddies += get_velocity_to_avoid_obstacles(point_position,
                                                                                      [baddy_data.data.pose[:2]],
                                                                                      [
                                                                                          ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.obstacle],
                                                                                      max_speed=self.config.max_speed,
-                                                                                     scale_factor=10,
+                                                                                     scale_factor=5,
                                                                                      prune_distance=0.5)
 
         # If has a target baddy
@@ -280,6 +283,7 @@ class Police(RobotAbstract):
                                                   [ROBOT_RADIUS + SECURITY_DISTANCE.obstacle + obs.params.radius for obs
                                                    in self.global_config.obstacles if obs.params.type == 'cylinder'],
                                                   max_speed=self.config.max_speed,
+                                                  scale_factor = 6,
                                                   prune_distance=0.5)
         v_dict.avoid_hitting_obstacles = v_avoid
 
@@ -580,7 +584,7 @@ def get_velocity_to_reach_goal(position, goal_position, max_speed):
     # get the unit vector pointing to the goal
     current_distance = get_distance(position, goal_position)
     unit_direction = (goal_position - position) / current_distance
-    amplitude = max_speed
+    amplitude = max_speed 
     # give the vector the MAX_SPEED amplitude
     v = unit_direction * amplitude
 
@@ -591,8 +595,8 @@ def get_velocity_to_avoid_obstacles(position,
                                     obstacle_positions,
                                     obstacle_radii,
                                     max_speed,
-                                    scale_factor=5,
-                                    prune_distance=0.5):
+                                    scale_factor=1,
+                                    prune_distance=2.5):
     v = np.zeros(2, dtype=np.float32)
     # MISSING: Compute the velocity field needed to avoid the obstacles
     # In the worst case there might a large force pushing towards the
@@ -614,18 +618,21 @@ def get_velocity_to_avoid_obstacles(position,
         decay_factor = np.exp(-np.abs((to_obs_distance - obstacle_radius)) * scale_factor)
 
         # Assign amplitude
-        if to_obs_distance <= obstacle_radius:
-            amplitude = max_speed
+        if (to_obs_distance - obstacle_radius) > prune_distance:
+            amplitude = 0
+        elif to_obs_distance <= obstacle_radius:
+            amplitude = max_speed 
         else:
             amplitude = decay_factor * max_speed
 
-        if (to_obs_distance - obstacle_radius) > prune_distance:
-            amplitude = 0
+        
 
         # add to v. There might be multiple obstacles
+        u = unit_direction * amplitude
+        v = v.copy() + u
         v += unit_direction * amplitude
         # print("cyliner", i, ": ", obstacle_position, position, obstacle_radius, unit_direction, amplitude)
-
+    
     return v
 
 
