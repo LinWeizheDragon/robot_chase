@@ -107,7 +107,9 @@ class RobotAbstract():
 
         pose_msg = generate_pose_msg(self.pose_publisher, v, point_position, frame_id)
         generate_marker(self.marker_publisher, self.name,
-                        'v={} [T: {}]  w={} [T: {}]'.format(round(speed,2),
+                        'position = {}\n v={} [T: {}]  w={} [T: {}]'.format(
+                            point_position,
+                            round(speed,2),
                                                             round(u,2),
                                                             round(rotate_speed,2),
                                                             round(w,2)), pose_msg, frame_id)
@@ -131,10 +133,18 @@ class Police(RobotAbstract):
                                sensor, positioning)
         self.captured = set()
         self.current_target = None
+        self.last_update_target = rospy.get_rostime()
 
     def set_target(self, target_name):
         # Change chasing target
-        self.current_target = target_name
+        current_time = rospy.get_rostime()
+        if (current_time - self.last_update_target).to_sec() < 5 and self.current_target is not None:
+            # Do not change target
+            pass
+        else:
+            self.current_target = target_name
+            self.last_update_target = current_time
+            print(self.name, 'change target to', target_name)
 
     def get_current_target(self):
         return self.current_target
@@ -143,6 +153,7 @@ class Police(RobotAbstract):
         print(self.name, 'captures', captured, 'at', self.current_position)
         self.captured.add(captured)
         # print(self.name, self.captured)
+        self.last_update_target = rospy.get_rostime()
 
     def controller(self, *args, **kwargs):
         # u, w = braitenberg(*args)
@@ -226,7 +237,7 @@ class Police(RobotAbstract):
                 self.maintain_target = goal_position
                 self.maintain_target_counter = 10
                 if speed < 0.2:
-                    self.maintain_target_counter += 100
+                    self.maintain_target_counter += 300
 
                 # if self.maintain_target is None:
                 #     self.maintain_target = goal_position

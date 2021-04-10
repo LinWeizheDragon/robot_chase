@@ -22,7 +22,13 @@ def initial_position(config, frame_id):
         state_msg.pose.position.y = pose[1]
         state_msg.pose.position.z = 0
         state_msg.pose.orientation.x, state_msg.pose.orientation.y, state_msg.pose.orientation.z, state_msg.pose.orientation.w = quaternion_from_euler(
-        0, 0, np.random.uniform(low = 0, high = np.pi))
+        0, 0, 0) # np.random.uniform(low = 0, high = np.pi)
+        state_msg.twist.linear.x = 1
+        state_msg.twist.linear.y = 0
+        state_msg.twist.linear.z = 0
+        state_msg.twist.angular.x = 0
+        state_msg.twist.angular.y = 0
+        state_msg.twist.angular.z = 0
         m_l.append(state_msg)
         config.robots[i].initial_position = pose
     return m_l,config

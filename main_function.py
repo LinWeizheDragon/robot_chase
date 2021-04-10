@@ -50,7 +50,7 @@ def run(config, run_id=0):
     rospy.init_node('obstacle_avoidance')
 
     # Update control every 100 ms.
-    rate_limiter = rospy.Rate(50)
+    rate_limiter = rospy.Rate(100)
 
     robot_intances = []
     police_intances = []
@@ -101,6 +101,8 @@ def run(config, run_id=0):
         print ("Service call failed: %s" % e)
     print('simulation reset!')
 
+    if run_id < 45:
+        return None
 
     start_simulation()
 
@@ -142,7 +144,6 @@ def run(config, run_id=0):
 
 
     frame_id = 0
-    import time
     start_time = rospy.get_rostime()
     while not rospy.is_shutdown():
         current_time = rospy.get_rostime()
@@ -212,7 +213,7 @@ def run(config, run_id=0):
                 if police.current_target == nearest_baddy[1].name:
                     pass
                 else:
-                    lprint(police.name, 'changed its target to', nearest_baddy[1].name)
+                    # lprint(police.name, 'changed its target to', nearest_baddy[1].name)
                     police.set_target(nearest_baddy[1].name)
 
         # print(type(current_time), type(metrics_manager.last_update_timestamp))
@@ -310,7 +311,8 @@ if __name__ == '__main__':
                 print('start running Experiment {} : {} / {}'.format(experiment_name, run_id+1, num_test))
                 result = run(configs, run_id)
                 run_id += 1
-                all_success.append(result.all_success)
+                if result is not None:
+                    all_success.append(result.all_success)
             except rospy.ROSTimeMovedBackwardsException:
                 print('catch ROSTimeMovedBackwardsException, ignore and restart!')
                 pass
