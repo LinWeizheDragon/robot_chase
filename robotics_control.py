@@ -82,10 +82,6 @@ class RobotAbstract():
                                 laser_measurements=laser_measurements)
 
         u, w, v = self.controller(measurements=measurements)
-        # if w < -0.4:
-        #     w = -0.4
-        # if w > 0.4:
-        #     w = 0.4
         # measurements = self.sensor.measurements
         # u, w = self.controller(*measurements)
         vel_msg = Twist()
@@ -137,14 +133,9 @@ class Police(RobotAbstract):
 
     def set_target(self, target_name):
         # Change chasing target
-        current_time = rospy.get_rostime()
-        if (current_time - self.last_update_target).to_sec() < 5 and self.current_target is not None:
-            # Do not change target
-            pass
-        else:
-            self.current_target = target_name
-            self.last_update_target = current_time
-            print(self.name, 'change target to', target_name)
+        self.current_target = target_name
+        # self.last_update_target = current_time
+        print(self.name, 'change target to', target_name)
 
     def get_current_target(self):
         return self.current_target
@@ -191,25 +182,25 @@ class Police(RobotAbstract):
         for obj_name, obj in observations.items():
             if obj_name in police_names:
                 police[obj_name] = obj
-            elif obj_name in baddy_names:
+            if obj_name in baddy_names:
                 baddies[obj_name] = obj
-            elif obj_name in baddy_captured:
+            if obj_name in baddy_captured:
                 captured[obj_name] = obj
 
         v_dict = EasyDict()
 
         # avoid hitting other police
-        v_dict.avoid_hitting_police = np.zeros(2, dtype=np.float32)
-        for police_name, police_data in police.items():
-            if police_name == self.name:
-                continue
-            v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
-                                                                           [police_data.data.pose[:2]],
-                                                                           [
-                                                                               ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
-                                                                           max_speed=self.config.max_speed,
-                                                                           scale_factor=10,
-                                                                           prune_distance=0.5)
+        # v_dict.avoid_hitting_police = np.zeros(2, dtype=np.float32)
+        # for police_name, police_data in police.items():
+        #     if police_name == self.name:
+        #         continue
+        #     v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
+        #                                                                    [police_data.data.pose[:2]],
+        #                                                                    [
+        #                                                                        ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
+        #                                                                    max_speed=self.config.max_speed,
+        #                                                                    scale_factor=10,
+        #                                                                    prune_distance=0.5)
 
         # avoid hitting other captured baddies
         v_dict.avoid_hitting_captured_baddies = np.zeros(2, dtype=np.float32)
@@ -239,8 +230,8 @@ class Police(RobotAbstract):
 
                 self.maintain_target = goal_position
                 self.maintain_target_counter = 10
-                if speed < 0.2:
-                    self.maintain_target_counter += 300
+                # if speed < 0.2:
+                #     self.maintain_target_counter += 10
 
                 # if self.maintain_target is None:
                 #     self.maintain_target = goal_position
@@ -362,7 +353,7 @@ class Baddy(RobotAbstract):
                                                        [ROBOT_RADIUS + SECURITY_DISTANCE.competitor],
                                                        max_speed=self.config.max_speed,
                                                        scale_factor=1,
-                                                       prune_distance=np.inf)
+                                                       prune_distance=5)
             v_dict.escape_from_police += v_escape
 
         # Avoid hitting walls

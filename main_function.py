@@ -101,8 +101,8 @@ def run(config, run_id=0):
         print ("Service call failed: %s" % e)
     print('simulation reset!')
 
-    if run_id < 45:
-        return None
+    # if run_id < 17:
+    #     return None
 
     start_simulation()
 

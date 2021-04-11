@@ -22,8 +22,8 @@ def initial_position(config, frame_id):
         state_msg.pose.position.y = pose[1]
         state_msg.pose.position.z = 0
         state_msg.pose.orientation.x, state_msg.pose.orientation.y, state_msg.pose.orientation.z, state_msg.pose.orientation.w = quaternion_from_euler(
-        0, 0, 0) # np.random.uniform(low = 0, high = np.pi)
-        state_msg.twist.linear.x = 1
+        0, 0, np.random.uniform(low = 0, high = np.pi))
+        state_msg.twist.linear.x = 0
         state_msg.twist.linear.y = 0
         state_msg.twist.linear.z = 0
         state_msg.twist.angular.x = 0
@@ -33,19 +33,34 @@ def initial_position(config, frame_id):
         config.robots[i].initial_position = pose
     return m_l,config
 
+from robotics_control import get_distance
+
 def is_valid(pose):
     for c in CYLINDERS :
         c = EasyDict(c)
-        if np.linalg.norm(pose - c.params.position[0]) < c.params.radius:
+        if np.linalg.norm(pose - c.params.position) < (c.params.radius+0.5):
             return False
     return True
 
 
-def random_pose():
-    pose = np.random.uniform(low = -WALL_POSITION * 0.95, high = WALL_POSITION * 0.95, size = 2)
-    
+def random_pose(type='police'):
+    low = -WALL_POSITION * 0.9
+    high = WALL_POSITION * 0.9
+    def get_random_pose(type='police'):
+        if type == 'police':
+            pose = np.concatenate([
+                np.random.uniform(low=low, high=0, size=1),
+                np.random.uniform(low=-2, high=2, size=1),
+            ])
+        else:
+            pose = np.concatenate([
+                np.random.uniform(low=0, high=high, size=1),
+                np.random.uniform(low=low, high=high, size=1),
+            ])
+        return pose
+    pose = get_random_pose(type=type)
     while not is_valid(pose):
-        pose = np.random.uniform(low = -WALL_POSITION * 0.95, high = WALL_POSITION * 0.95, size = 2)
+        pose = get_random_pose(type=type)
     return pose
 
 def distant_poses(config):
@@ -53,7 +68,7 @@ def distant_poses(config):
     b=[]
     r=[]
     for robot in config.robots:
-        random_pos = random_pose()
+        random_pos = random_pose(robot.type)
         if robot.type == 'police':
             p.append(random_pos)
         else:
