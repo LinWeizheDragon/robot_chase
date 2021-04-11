@@ -397,7 +397,7 @@ class Baddy(RobotAbstract):
 
         combined_v = cap(combined_v, max_speed=self.config.max_speed)
         # anyways try to escape
-        if get_magnitude(combined_v) < (0.5 * self.config.max_speed):
+        if get_magnitude(combined_v) < (self.config.max_speed):
             if get_magnitude(v_dict.escape_from_police) > (0.8 * self.config.max_speed):
                 combined_v = self.config.max_speed * combined_v / get_magnitude(combined_v)
 
