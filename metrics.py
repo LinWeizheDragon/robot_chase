@@ -7,6 +7,8 @@ class MetricsManager():
         self.config=config
         self.instance_dict=None
         self.all_success = False
+        self.individual_success_list = []
+        self.capture_time = {}
         self.capture_history = []
         self.logs = []
         self.frame_id = 0
@@ -37,6 +39,8 @@ class MetricsManager():
             total_time=rospy.get_rostime().to_sec(),
             capture_history=self.capture_history,
             all_success=self.all_success,
+            individual_success_list=self.individual_success_list,
+            capture_time=self.capture_time,
         )
 
     def set_instance_dict(self, instance_dict):
@@ -63,7 +67,8 @@ class MetricsManager():
             police={},
             baddies={},
         )
-        success=True
+        all_success = True
+        success_list = []
         for robot_name, robot_instance in self.instance_dict.items():
             if robot_instance.type=='police':
                 # print(robot_instance.name, robot_instance.captured)
@@ -73,9 +78,16 @@ class MetricsManager():
                 if len(robot_instance.capture_by) == 0:
                     # this baddy has not been captured by anyone
                     # print('baddy', robot_instance.name, 'is not captured yet.')
-                    success = False
+                    all_success = False
+                    success_list.append(False)
+                else:
+                    success_list.append(True)
+                    if self.capture_time.get(robot_name, None) is None:
+                        self.capture_time[robot_name] = rospy.get_rostime().to_sec()
+
                 current_state.baddies[robot_name] = robot_instance.capture_by
 
         self.capture_history.append(current_state)
-        self.all_success = success
+        self.all_success = all_success
+        self.individual_success_list = success_list
 

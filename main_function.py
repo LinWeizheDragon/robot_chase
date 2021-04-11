@@ -229,7 +229,7 @@ def run(config, run_id=0):
                 if police.current_target == nearest_baddy[1].name:
                     pass
                 else:
-                    # lprint(police.name, 'changed its target to', nearest_baddy[1].name)
+                    lprint(police.name, 'changed its target to', nearest_baddy[1].name)
                     police.set_target(nearest_baddy[1].name)
 
         # print(type(current_time), type(metrics_manager.last_update_timestamp))
@@ -322,21 +322,31 @@ if __name__ == '__main__':
     try:
         run_id = 0
         all_success = []
+        individual_success_list = []
+        capture_flowtime_list = []
         while run_id<num_test:
             try:
                 print('start running Experiment {} : {} / {}'.format(experiment_name, run_id+1, num_test))
                 result = run(configs, run_id)
                 run_id += 1
                 if result is not None:
+                    print(result)
                     all_success.append(result.all_success)
+                    individual_success_list+=result.individual_success_list
+                    capture_flowtime_list += [flowtime for flowtime in result.capture_time.values()]
             except rospy.ROSTimeMovedBackwardsException:
                 print('catch ROSTimeMovedBackwardsException, ignore and restart!')
                 pass
 
         # Processing and output result metrics
         all_success_rate = np.mean(np.array(all_success))
+        individual_success_rate = np.mean(np.array(individual_success_list))
+        capture_flowtime_mean = np.mean(np.array(capture_flowtime_list))
+
         print('all experiments finished.')
         print('all_success_rate', all_success_rate)
+        print('individual_success_rate', individual_success_rate)
+        print('capture_flowtime_mean', capture_flowtime_mean)
 
         dir_path = os.path.join(
             '../catkin_ws/src/robot_chase/experiments', configs.experiment_name)
@@ -347,6 +357,10 @@ if __name__ == '__main__':
             json.dump({
                 'all_success': all_success,
                 'all_success_rate': all_success_rate,
+                'individual_success_rate':individual_success_rate,
+                'individual_success_list':individual_success_list,
+                'capture_flowtime_mean': capture_flowtime_mean,
+                'capture_flowtime_list': capture_flowtime_list,
                 'num_test': num_test
             }, f, indent=4)
             print('all experiments saved to {}'.format(save_path))

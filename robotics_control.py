@@ -135,7 +135,7 @@ class Police(RobotAbstract):
         # Change chasing target
         self.current_target = target_name
         # self.last_update_target = current_time
-        print(self.name, 'change target to', target_name)
+        # print(self.name, 'change target to', target_name)
 
     def get_current_target(self):
         return self.current_target
