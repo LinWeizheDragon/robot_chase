@@ -101,14 +101,30 @@ def run(config, run_id=0):
         print ("Service call failed: %s" % e)
     print('simulation reset!')
 
-    # if run_id < 17:
-    #     return None
+    def read_experiments():
+        dir_path = os.path.join(
+            '../catkin_ws/src/robot_chase/experiments', config.experiment_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        save_path = os.path.join(dir_path, 'run_{}.pkl'.format(run_id))
+        if not os.path.exists(save_path):
+            return None
+        with open(save_path, 'rb') as f:
+            experiment_data = pickle.load(f)
+            return experiment_data
+
+    experiment_data = read_experiments()
+    if experiment_data is not None:
+        # this experiment has been run before
+        print('Case has been done, returning directly.')
+        return experiment_data.metrics_data
 
     start_simulation()
 
     # Create metrics logger
     metrics_manager = MetricsManager(configs)
     metrics_manager.set_instance_dict(instance_dict)
+
 
     def save_experiments():
         '''
