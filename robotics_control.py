@@ -189,18 +189,18 @@ class Police(RobotAbstract):
 
         v_dict = EasyDict()
 
-        # avoid hitting other police
-        # v_dict.avoid_hitting_police = np.zeros(2, dtype=np.float32)
-        # for police_name, police_data in police.items():
-        #     if police_name == self.name:
-        #         continue
-        #     v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
-        #                                                                    [police_data.data.pose[:2]],
-        #                                                                    [
-        #                                                                        ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
-        #                                                                    max_speed=self.config.max_speed,
-        #                                                                    scale_factor=10,
-        #                                                                    prune_distance=0.5)
+         #avoid hitting other police
+        v_dict.avoid_hitting_police = np.zeros(2, dtype=np.float32)
+        for police_name, police_data in police.items():
+            if police_name == self.name:
+                continue
+            v_dict.avoid_hitting_police += get_velocity_to_avoid_obstacles(point_position,
+                                                                            [police_data.data.pose[:2]],
+                                                                            [
+                                                                                ROBOT_RADIUS + ROBOT_RADIUS + SECURITY_DISTANCE.companion],
+                                                                            max_speed=self.config.max_speed,
+                                                                            scale_factor=10,
+                                                                            prune_distance=0.5)
 
         # avoid hitting other captured baddies
         v_dict.avoid_hitting_captured_baddies = np.zeros(2, dtype=np.float32)
