@@ -202,8 +202,7 @@ def run(config, run_id=0):
                     police.add_capture(baddy.name)
                     baddy.get_captured_by(police.name)
                     lprint(police.name, 'captured', baddy.name, 'at', police.current_position)
-                if baddy.free:
-                    if dist < nearest_baddy[0]:
+                elif dist < nearest_baddy[0]:
                         # This baddy is more close
                         nearest_baddy = (dist, baddy)
 
@@ -226,6 +225,7 @@ def run(config, run_id=0):
             else:
                 # simple strategy to chase the nearest baddy
                 if police.current_target == nearest_baddy[1].name:
+                    police.set_predict_step(nearest_baddy[0]*10)
                     pass
                 else:
                     lprint(police.name, 'changed its target to', nearest_baddy[1].name)

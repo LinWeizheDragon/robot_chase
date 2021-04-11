@@ -130,12 +130,13 @@ class Police(RobotAbstract):
         self.captured = set()
         self.current_target = None
         self.last_update_target = rospy.get_rostime()
+        self.predict_step = 50
 
     def set_target(self, target_name):
         # Change chasing target
         self.current_target = target_name
-        # self.last_update_target = current_time
-        # print(self.name, 'change target to', target_name)
+    def set_predict_step(self, n):
+        self.predict_step = n
 
     def get_current_target(self):
         return self.current_target
@@ -225,7 +226,7 @@ class Police(RobotAbstract):
                 elif self.global_config.strategy == 'estimation':
                     goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
                                                                                observations[self.current_target].data,
-                                                                               step=80).mean
+                                                                               step=self.predict_step).mean
                     goal_position = goal_pose[:2]
 
                 self.maintain_target = goal_position
@@ -260,7 +261,7 @@ class Police(RobotAbstract):
         for obstacle in self.global_config.obstacles:
             if obstacle.params.type == 'square_wall':
                 v_avoid = get_velocity_to_avoid_walls(point_position, obstacle, max_speed=self.config.max_speed)
-                v_dict.avoid_hitting_walls += v_avoid
+                v_dict.avoid_hitting_walls += v_avoid*0.1
 
         # v_avoid = get_velocity_to_avoid_obstacles(point_position,
         #                                           [obs.data.position for obs in observations.values() if
@@ -479,7 +480,7 @@ class PoseEstimator():
                 # print(data)
                 v = np.sqrt(twist.linear.x ** 2 + twist.linear.y ** 2)
                 w = twist.angular.z
-                w = w * np.exp(-0.1*(step - remaining_step))
+                #yaw = np.arctan2(twist.linear.y, twist.linear.x)
                 # v = np.sqrt(mean_t1[X] ** 2 + mean_t1[Y] ** 2)
                 # w = mean_t1[YAW]
 
@@ -493,37 +494,16 @@ class PoseEstimator():
 
                 # Get new multivariate Gaussian
                 mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
-
-                VALID_OFFSET = WALL_POSITION-0.2
-                if abs(mean_t2[X]>VALID_OFFSET) or abs(mean_t2[Y]>VALID_OFFSET):
-                    # the mean point runs out of the arena
-                    rotate_angle = None
-                    if mean_t2[X] > VALID_OFFSET:
-                        if mean_t2[Y] > 0:
-                            rotate_angle = -np.pi
-                        else:
-                            rotate_angle = np.pi
-                    if mean_t2[X] < -VALID_OFFSET:
-                        if mean_t2[Y] > 0:
-                            rotate_angle = np.pi
-                        else:
-                            rotate_angle = -np.pi
-                    if mean_t2[Y] > VALID_OFFSET:
-                        if mean_t2[X] > 0:
-                            rotate_angle = np.pi
-                        else:
-                            rotate_angle = -np.pi
-                    if mean_t2[Y] < -VALID_OFFSET:
-                        if mean_t2[X] > 0:
-                            rotate_angle = -np.pi
-                        else:
-                            rotate_angle = np.pi
-                    if rotate_angle is not None:
-                        rotation_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle), 0],
-                                        [np.sin(rotate_angle), np.cos(rotate_angle), 0],
-                                        [0, 0, 1]], dtype=np.float32)
-                    mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
-
+                if abs(mean_t2[0]) > WALL_POSITION*0.95:
+                    if abs(mean_t2[1]) > WALL_POSITION*0.9:
+                        mean_t2 = mean_t1 + np.array([0, -np.sign(mean_t1[1])*v/2,0])
+                    else:
+                        mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.y)*v/2, 0])
+                elif abs(mean_t2[1])> WALL_POSITION*0.95:
+                    if abs(mean_t2[1]) > WALL_POSITION*0.9:
+                        mean_t2 = mean_t1 + np.array([-np.sign(mean_t2[0])*v/2,0,0])
+                    else:
+                        mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.x)*v/2, 0])
                 # print('+', mean_move, '=', mean_t2)
                 variance_t2 = np.matmul(rotation_matrix, variance_t1)
                 variance_t2 = np.matmul(variance_t2, rotation_matrix.T)
@@ -776,7 +756,7 @@ def generate_marker(marker_publisher, robot_name, v, pose, frame_id, goal=False)
         marker.color.g = 1.0
         marker.color.b = 0.5
     else:
-        marker.text = 'R{}: {}'.format(robot_name[-1], v)
+        marker.text = 'R{}'.format(robot_name[-1])
         # marker.text = 'R{}: {}'.format(robot_name[-1], pose.pose.position)
         marker.pose.position = pose.pose.position
         marker.color.r = 1.0
