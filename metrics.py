@@ -33,6 +33,10 @@ class MetricsManager():
                         )]
             all_success: bool
         '''
+        new_capture_time = self.capture_time.copy()
+        for robot_name, flowtime in new_capture_time.items():
+            if flowtime is None:
+                new_capture_time[robot_name] = rospy.get_rostime()
         return EasyDict(
             logs=self.logs,
             total_frames=self.frame_id,
@@ -40,7 +44,7 @@ class MetricsManager():
             capture_history=self.capture_history,
             all_success=self.all_success,
             individual_success_list=self.individual_success_list,
-            capture_time=self.capture_time,
+            capture_time=new_capture_time,
         )
 
     def set_instance_dict(self, instance_dict):
@@ -74,6 +78,7 @@ class MetricsManager():
                 # print(robot_instance.name, robot_instance.captured)
                 current_state.police[robot_name] = robot_instance.captured
             else:
+                self.capture_time.setdefault(robot_name, None)
                 # print(robot_instance.name, robot_instance.capture_by)
                 if len(robot_instance.capture_by) == 0:
                     # this baddy has not been captured by anyone
