@@ -36,7 +36,7 @@ class MetricsManager():
         new_capture_time = self.capture_time.copy()
         for robot_name, flowtime in new_capture_time.items():
             if flowtime is None:
-                new_capture_time[robot_name] = rospy.get_rostime()
+                new_capture_time[robot_name] = rospy.get_rostime().to_sec()
         return EasyDict(
             logs=self.logs,
             total_frames=self.frame_id,

@@ -330,7 +330,7 @@ if __name__ == '__main__':
                 result = run(configs, run_id)
                 run_id += 1
                 if result is not None:
-                    print(result)
+                    # print(result)
                     all_success.append(result.all_success)
                     individual_success_list+=result.individual_success_list
                     capture_flowtime_list += [flowtime for flowtime in result.capture_time.values()]
