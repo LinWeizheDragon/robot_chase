@@ -47,7 +47,6 @@ def run(config, run_id=0):
     :param run_id: current run id
     :return: log_data from metrics manager. See metrics.MetricsManager.get_log_data()
     '''
-    rospy.init_node('obstacle_avoidance')
 
     # Update control every 100 ms.
     rate_limiter = rospy.Rate(100)
@@ -320,7 +319,8 @@ if __name__ == '__main__':
     print(configs)
 
     try:
-        run_id = 0
+        rospy.init_node('obstacle_avoidance')
+        # run_id = 15
         all_success = []
         individual_success_list = []
         capture_flowtime_list = []
@@ -330,7 +330,6 @@ if __name__ == '__main__':
                 result = run(configs, run_id)
                 run_id += 1
                 if result is not None:
-                    # print(result)
                     all_success.append(result.all_success)
                     individual_success_list+=result.individual_success_list
                     capture_flowtime_list += [flowtime for flowtime in result.capture_time.values()]
