@@ -225,7 +225,7 @@ class Police(RobotAbstract):
                 elif self.global_config.strategy == 'estimation':
                     goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
                                                                                observations[self.current_target].data,
-                                                                               step=30).mean
+                                                                               step=80).mean
                     goal_position = goal_pose[:2]
 
                 self.maintain_target = goal_position
@@ -479,6 +479,7 @@ class PoseEstimator():
                 # print(data)
                 v = np.sqrt(twist.linear.x ** 2 + twist.linear.y ** 2)
                 w = twist.angular.z
+                w = w * np.exp(-0.1*(step - remaining_step))
                 # v = np.sqrt(mean_t1[X] ** 2 + mean_t1[Y] ** 2)
                 # w = mean_t1[YAW]
 
@@ -492,6 +493,37 @@ class PoseEstimator():
 
                 # Get new multivariate Gaussian
                 mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
+
+                VALID_OFFSET = WALL_POSITION-0.2
+                if abs(mean_t2[X]>VALID_OFFSET) or abs(mean_t2[Y]>VALID_OFFSET):
+                    # the mean point runs out of the arena
+                    rotate_angle = None
+                    if mean_t2[X] > VALID_OFFSET:
+                        if mean_t2[Y] > 0:
+                            rotate_angle = -np.pi
+                        else:
+                            rotate_angle = np.pi
+                    if mean_t2[X] < -VALID_OFFSET:
+                        if mean_t2[Y] > 0:
+                            rotate_angle = np.pi
+                        else:
+                            rotate_angle = -np.pi
+                    if mean_t2[Y] > VALID_OFFSET:
+                        if mean_t2[X] > 0:
+                            rotate_angle = np.pi
+                        else:
+                            rotate_angle = -np.pi
+                    if mean_t2[Y] < -VALID_OFFSET:
+                        if mean_t2[X] > 0:
+                            rotate_angle = -np.pi
+                        else:
+                            rotate_angle = np.pi
+                    if rotate_angle is not None:
+                        rotation_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle), 0],
+                                        [np.sin(rotate_angle), np.cos(rotate_angle), 0],
+                                        [0, 0, 1]], dtype=np.float32)
+                    mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
+
                 # print('+', mean_move, '=', mean_t2)
                 variance_t2 = np.matmul(rotation_matrix, variance_t1)
                 variance_t2 = np.matmul(variance_t2, rotation_matrix.T)
