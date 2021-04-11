@@ -7,6 +7,7 @@
     <arg name="strategy" default="naive"/>
     <arg name="visibility" default="none"/>
     <arg name="velocity_component" default="none"/>
+    <arg name="timeout" default="90"/>
 	<node pkg="robot_chase" type="main_function.py" name="main_function"
 	args="--mode=$(arg mode)
 	--experiment_name=$(arg experiment_name)
@@ -16,6 +17,7 @@
 	--strategy $(arg strategy)
 	--velocity_component $(arg velocity_component)
 	--visibility $(arg visibility)
+	--timeout $(arg timeout)
 	--end"
 	output="screen"></node>
 </launch>
