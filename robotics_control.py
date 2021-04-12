@@ -495,13 +495,13 @@ class PoseEstimator():
                 mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
                 if abs(mean_t2[0]) > WALL_POSITION*0.95:
                     mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.y)*v/2, 0])                    
-                    #variance_t2 = np.zeros((3, 3), dtype=np.float32)
+                    variance_t2 = np.zeros((3, 3), dtype=np.float32)
                     #variance_t2[X, X] = 0.1
                     #variance_t2[Y, Y] = 0.1
                     #variance_t2[YAW, YAW] = 0.01
                 elif abs(mean_t2[1])> WALL_POSITION*0.95:
                     mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.x)*v/2, 0])
-                    #variance_t2 = np.zeros((3, 3), dtype=np.float32)
+                    variance_t2 = np.zeros((3, 3), dtype=np.float32)
                     #variance_t2[X, X] = 0.1
                     #variance_t2[Y, Y] = 0.1
                     #variance_t2[YAW, YAW] = 0.01
