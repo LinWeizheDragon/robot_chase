@@ -135,6 +135,7 @@ class Police(RobotAbstract):
     def set_target(self, target_name):
         # Change chasing target
         self.current_target = target_name
+
     def set_predict_step(self, n):
         self.predict_step = n
 
@@ -481,43 +482,94 @@ class PoseEstimator():
                 v = np.sqrt(twist.linear.x ** 2 + twist.linear.y ** 2)
                 w = twist.angular.z
                 #yaw = np.arctan2(twist.linear.y, twist.linear.x)
+                # if name == "robot3":
+                #     print('mean_t1', mean_t1)
                 # v = np.sqrt(mean_t1[X] ** 2 + mean_t1[Y] ** 2)
                 # w = mean_t1[YAW]
+                # decay as steps increases, as a robot won't normally rotate for long
+                w = w * np.exp(-(step-remaining_step)*1)
 
                 # Motion model
                 variance_move = np.zeros((3, 3), dtype=np.float32)
-                variance_move[X, X] = 0.1
-                variance_move[Y, Y] = 0.5
-                variance_move[YAW, YAW] = 0.05
+                variance_move[X, X] = 0.1  # in u direction
+                variance_move[Y, Y] = 0.5  # perpendicular to u direction
+                variance_move[YAW, YAW] = 0.05  # in w
+
                 # in robot frame, move forward with v and rotate in w
                 mean_move = np.array([v, 0, w])
                 # Get new multivariate Gaussian
                 mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
-                if abs(mean_t2[0]) > WALL_POSITION*0.95:
-                    mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.y)*v/2, 0])                    
-                    variance_t2 = np.zeros((3, 3), dtype=np.float32)
-                    #variance_t2[X, X] = 0.1
-                    #variance_t2[Y, Y] = 0.1
-                    #variance_t2[YAW, YAW] = 0.01
-                elif abs(mean_t2[1])> WALL_POSITION*0.95:
-                    mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.x)*v/2, 0])
-                    variance_t2 = np.zeros((3, 3), dtype=np.float32)
-                    #variance_t2[X, X] = 0.1
-                    #variance_t2[Y, Y] = 0.1
-                    #variance_t2[YAW, YAW] = 0.01
-                # print('+', mean_move, '=', mean_t2)
+                # if abs(mean_t2[0]) > WALL_POSITION*0.95:
+                #
+                #     mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.y)*v/2, 0])
+                #     variance_t2 = np.zeros((3, 3), dtype=np.float32)
+                #     #variance_t2[X, X] = 0.1
+                #     #variance_t2[Y, Y] = 0.1
+                #     #variance_t2[YAW, YAW] = 0.01
+                # elif abs(mean_t2[1])> WALL_POSITION*0.95:
+                #     mean_t2 = mean_t1 + np.array([0, np.sign(twist.linear.x)*v/2, 0])
+                #     variance_t2 = np.zeros((3, 3), dtype=np.float32)
+                #     #variance_t2[X, X] = 0.1
+                #     #variance_t2[Y, Y] = 0.1
+                #     #variance_t2[YAW, YAW] = 0.01
+                # # print('+', mean_move, '=', mean_t2)
+                # else:
+                variance_t2 = None
+                if abs(mean_t2[X]) > WALL_POSITION*0.95:
+                    # Here determine the final direction after aligning with the wall
+                    final_theta = np.pi / 2 * np.sign(mean_t1[YAW])
+                    # Change mean_t1 to point to final_theta
+                    mean_t1[YAW] = final_theta
+                    # Rotate variance_t1 to point to final_theta
+                    R = np.array([[np.cos(final_theta - mean_t1[YAW]), np.sin(final_theta - mean_t1[YAW]), 0],
+                                            [-np.sin(final_theta - mean_t1[YAW]), np.cos(final_theta - mean_t1[YAW]), 0],
+                                            [0, 0, 1]], dtype=np.float32)
+                    variance_t1 = np.matmul(R, variance_t1)
+                    variance_t1 = np.matmul(variance_t1, R.T)
+                    # Recompute mean_t2
+                    mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
+                    # Recompute variance_t2
+                    # Rotate variance_move (in robot frame) to final_theta
+                    variance_change = np.matmul(R, variance_move)
+                    variance_change = np.matmul(variance_change, R.T)
+                    variance_t2 = variance_t1 + variance_change
+
+                if abs(mean_t2[Y]) > WALL_POSITION*0.95:
+                    # Here determine the final direction after aligning with the wall
+                    final_theta = np.pi if abs(mean_t1[YAW]) > np.pi/2 else 0
+                    # Change mean_t1 to point to final_theta
+                    mean_t1[YAW] = final_theta
+                    # Rotate variance_t1 to point to final_theta
+                    R = np.array([[np.cos(final_theta - mean_t1[YAW]), np.sin(final_theta - mean_t1[YAW]), 0],
+                                            [-np.sin(final_theta - mean_t1[YAW]), np.cos(final_theta - mean_t1[YAW]), 0],
+                                            [0, 0, 1]], dtype=np.float32)
+                    variance_t1 = np.matmul(R, variance_t1)
+                    variance_t1 = np.matmul(variance_t1, R.T)
+                    # Recompute mean_t2
+                    mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
+                    # Recompute variance_t2
+                    # Rotate variance_move (in robot frame) to final_theta
+                    variance_change = np.matmul(R, variance_move)
+                    variance_change = np.matmul(variance_change, R.T)
+                    variance_t2 = variance_t1 + variance_change
+                if variance_t2 is not None:
+                    # already computed mean_t2 and variance_t2
+                    # by aligning with walls
+                    pass
                 else:
-                    variance_t2 = np.matmul(rotation_matrix, variance_t1)
-                    variance_t2 = np.matmul(variance_t2, rotation_matrix.T)
-                    variance_t2 = variance_t1 + variance_t2
+                    # as normal, compute new variance
+                    variance_change = np.matmul(rotation_matrix, variance_t1)
+                    variance_change = np.matmul(variance_change, rotation_matrix.T)
+                    variance_t2 = variance_t1 + variance_change
                 mean_t1 = mean_t2.copy()
                 variance_t1 = variance_t2.copy()
                 remaining_step -= 1
                 # if name == "robot3":
-                # print(mean_t2, remaining_step)
-                # print(remaining_step, '=====', name)
-                # print(mean_t2, variance_t2)
-                # print('==========')
+                #     # print(mean_t2, remaining_step)
+                #     print(remaining_step, '=====', name)
+                #     print(mean_move, variance_change)
+                #     print(mean_t2, variance_t2)
+                #     print('==========')
 
             return EasyDict(
                 mean=mean_t2,
@@ -758,7 +810,7 @@ def generate_marker(marker_publisher, robot_name, v, pose, frame_id, goal=False)
         marker.color.g = 1.0
         marker.color.b = 0.5
     else:
-        marker.text = 'R{}'.format(robot_name[-1])
+        marker.text = 'R{}: {}'.format(robot_name[-1], v)
         # marker.text = 'R{}: {}'.format(robot_name[-1], pose.pose.position)
         marker.pose.position = pose.pose.position
         marker.color.r = 1.0
