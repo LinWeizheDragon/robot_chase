@@ -48,7 +48,7 @@ def run(config, run_id=0):
     :return: log_data from metrics manager. See metrics.MetricsManager.get_log_data()
     '''
 
-    # Update control every 100 ms.
+    # Update control at 100 Hz
     rate_limiter = rospy.Rate(100)
 
     robot_intances = []
@@ -225,7 +225,7 @@ def run(config, run_id=0):
             else:
                 # simple strategy to chase the nearest baddy
                 if police.current_target == nearest_baddy[1].name:
-                    police.set_predict_step(nearest_baddy[0]*10)
+                    police.set_predict_step(max(300, min(nearest_baddy[0]*100, 1000)))
                     pass
                 else:
                     lprint(police.name, 'changed its target to', nearest_baddy[1].name)
@@ -320,7 +320,7 @@ if __name__ == '__main__':
 
     try:
         rospy.init_node('obstacle_avoidance')
-        # run_id = 15
+        run_id = 0
         all_success = []
         individual_success_list = []
         capture_flowtime_list = []

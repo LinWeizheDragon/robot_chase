@@ -68,7 +68,7 @@ class RobotAbstract():
         goal_position = GOAL_POSITION
         pose = groundtruth
         laser_measurements = self.sensor.measurements
-        observations = self.positioning.perceived_poses
+        observations = self.positioning.get_perceived_poses(self.name, self.config.visibility)
         # print('other observations', groundtruth.perceived_poses)
 
         # Process observations using PoseEsimator
@@ -106,9 +106,9 @@ class RobotAbstract():
                         'position = {}\n v={} [T: {}]  w={} [T: {}]'.format(
                             point_position,
                             round(speed,2),
-                                                            round(u,2),
-                                                            round(rotate_speed,2),
-                                                            round(w,2)), pose_msg, frame_id)
+                                round(u,2),
+                                round(rotate_speed,2),
+                                round(w,2)), pose_msg, frame_id)
 
     def stop(self):
         self.terminate = True
@@ -147,6 +147,7 @@ class Police(RobotAbstract):
         self.captured.add(captured)
         # print(self.name, self.captured)
         self.last_update_target = rospy.get_rostime()
+        self.positioning.reset_award_time()
 
     def controller(self, *args, **kwargs):
         # u, w = braitenberg(*args)
@@ -221,36 +222,46 @@ class Police(RobotAbstract):
         speed = get_magnitude(linear)
 
         if self.current_target is not None:
+            text = ''
             if self.maintain_target_counter == 0:
                 if self.global_config.strategy == 'naive':
                     goal_position = baddies[self.current_target].data.pose[:2]
                 elif self.global_config.strategy == 'estimation':
-                    goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
-                                                                               observations[self.current_target].data,
-                                                                               step=self.predict_step).mean
-                    goal_position = goal_pose[:2]
+                    if observations[self.current_target].type == 'realtime':
+                        # can see the target
+                        goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
+                                                                                   observations[self.current_target].data,
+                                                                                   step=self.predict_step).mean
+
+                        goal_position = goal_pose[:2]
+                    else:
+                        # can get only historical positions
+                        # try to reach the region of the target
+                        goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
+                                                                                   observations[
+                                                                                       self.current_target].data,
+                                                                              step=self.predict_step).mean
+                        text = 'estimated'
+
+                        goal_position = goal_pose[:2]
+                        if get_distance(goal_position, point_position) < CAPTURE_DISTANCE:
+                            # already reach the point
+                            observations[
+                                self.current_target].data.twist.linear.x = 0.7
+                            goal_pose = self.pose_estimator.get_estimated_distribution(self.current_target,
+                                                                                       observations[
+                                                                                           self.current_target].data,
+                                                                                       step=self.predict_step).mean
+                            goal_position = goal_pose[:2]
 
                 self.maintain_target = goal_position
                 self.maintain_target_counter = 10
-                # if speed < 0.2:
-                #     self.maintain_target_counter += 10
-
-                # if self.maintain_target is None:
-                #     self.maintain_target = goal_position
-                #     self.maintain_target_counter = 100
-                # else:
-                #     if linear < 0.2:
-                #         self.maintain_target_counter = 500
-                #         goal_position = self.maintain_target
-                #     else:
-                #         self.maintain_target_counter = 10
-                #         self.maintain_target = goal_position
 
             else:
                 self.maintain_target_counter -= 1
                 goal_position = self.maintain_target
 
-            generate_marker(self.goal_publisher, self.name, 0, goal_position, self.frame_id, goal=True)
+            generate_marker(self.goal_publisher, self.name, text, goal_position, self.frame_id, goal=True)
 
             v_chase_baddy = get_velocity_to_reach_goal(point_position,
                                                        goal_position,
@@ -487,7 +498,8 @@ class PoseEstimator():
                 # v = np.sqrt(mean_t1[X] ** 2 + mean_t1[Y] ** 2)
                 # w = mean_t1[YAW]
                 # decay as steps increases, as a robot won't normally rotate for long
-                w = w * np.exp(-(step-remaining_step)*1)
+                past_seconds = data.get('past', 0)
+                w = w * np.exp(-(step-remaining_step+past_seconds)*1)
 
                 # Motion model
                 variance_move = np.zeros((3, 3), dtype=np.float32)
@@ -515,19 +527,31 @@ class PoseEstimator():
                 # # print('+', mean_move, '=', mean_t2)
                 # else:
                 variance_t2 = None
+                # if abs(mean_t2[X]) > WALL_POSITION*0.9 and abs(mean_t2[Y]) > WALL_POSITION*0.9:
+
                 if abs(mean_t2[X]) > WALL_POSITION*0.95:
                     # Here determine the final direction after aligning with the wall
-                    final_theta = np.pi / 2 * np.sign(mean_t1[YAW])
-                    # Change mean_t1 to point to final_theta
-                    mean_t1[YAW] = final_theta
+                    if np.abs(mean_t1[YAW] - 0) <= 0.01:
+                        final_theta = - (np.pi / 2) * np.sign(mean_t1[Y])
+                    else:
+                        final_theta = (np.pi / 2) * np.sign(mean_t1[YAW])
+
                     # Rotate variance_t1 to point to final_theta
                     R = np.array([[np.cos(final_theta - mean_t1[YAW]), np.sin(final_theta - mean_t1[YAW]), 0],
                                             [-np.sin(final_theta - mean_t1[YAW]), np.cos(final_theta - mean_t1[YAW]), 0],
                                             [0, 0, 1]], dtype=np.float32)
+                    # Change mean_t1 to point to final_theta
+                    mean_t1[YAW] = final_theta
+
                     variance_t1 = np.matmul(R, variance_t1)
                     variance_t1 = np.matmul(variance_t1, R.T)
                     # Recompute mean_t2
+                    rotation_matrix = np.array([[np.cos(final_theta), -np.sin(final_theta), 0],
+                                                [np.sin(final_theta), np.cos(final_theta), 0],
+                                                [0, 0, 1]], dtype=np.float32)
                     mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
+                    if abs(mean_t2[Y]) > WALL_POSITION*0.9:
+                        mean_t2[Y] = np.sign(mean_t2[Y]) * WALL_POSITION*0.9
                     # Recompute variance_t2
                     # Rotate variance_move (in robot frame) to final_theta
                     variance_change = np.matmul(R, variance_move)
@@ -536,17 +560,30 @@ class PoseEstimator():
 
                 if abs(mean_t2[Y]) > WALL_POSITION*0.95:
                     # Here determine the final direction after aligning with the wall
-                    final_theta = np.pi if abs(mean_t1[YAW]) > np.pi/2 else 0
-                    # Change mean_t1 to point to final_theta
-                    mean_t1[YAW] = final_theta
+                    if np.abs(mean_t1[YAW] - np.pi) <= 0.01:
+                        final_theta = np.pi / 2 + (np.pi / 2) * np.sign(mean_t1[X])
+                    else:
+                        if abs(mean_t1[YAW]) > np.pi / 2:
+                            final_theta = np.pi
+                        else:
+                            final_theta = 0
+
                     # Rotate variance_t1 to point to final_theta
                     R = np.array([[np.cos(final_theta - mean_t1[YAW]), np.sin(final_theta - mean_t1[YAW]), 0],
                                             [-np.sin(final_theta - mean_t1[YAW]), np.cos(final_theta - mean_t1[YAW]), 0],
                                             [0, 0, 1]], dtype=np.float32)
+                    # Change mean_t1 to point to final_theta
+                    mean_t1[YAW] = final_theta
+
                     variance_t1 = np.matmul(R, variance_t1)
                     variance_t1 = np.matmul(variance_t1, R.T)
                     # Recompute mean_t2
+                    rotation_matrix = np.array([[np.cos(final_theta), -np.sin(final_theta), 0],
+                                                [np.sin(final_theta), np.cos(final_theta), 0],
+                                                [0, 0, 1]], dtype=np.float32)
                     mean_t2 = mean_t1 + np.matmul(rotation_matrix, mean_move) * self.global_config.dt
+                    if abs(mean_t2[X]) > WALL_POSITION*0.9:
+                        mean_t2[X] = np.sign(mean_t2[X]) * WALL_POSITION*0.9
                     # Recompute variance_t2
                     # Rotate variance_move (in robot frame) to final_theta
                     variance_change = np.matmul(R, variance_move)
@@ -555,6 +592,8 @@ class PoseEstimator():
                 if variance_t2 is not None:
                     # already computed mean_t2 and variance_t2
                     # by aligning with walls
+                    # if name == 'robot4':
+                    #     print(mean_t1, final_theta)
                     pass
                 else:
                     # as normal, compute new variance
@@ -580,15 +619,17 @@ class PoseEstimator():
     def process_observations(self, observations):
         observations = EasyDict(observations.copy())
         for obj_name, obj in observations.items():
-            # print(obj_name, obj)
             if obj_name in self.distribution_dict.keys():
                 # This is a robot that we want to track
                 if obj.type == 'realtime':
                     # Accurate positioning
+                    # print('setting accurate', obj_name)
                     self.set_accurate_distribution(obj_name, obj.data)
                 else:
-                    self.set_estimated_distribution(obj_name)
-
+                    # print('setting estimate', obj_name)
+                    self.set_estimated_distribution(obj_name, obj.data)
+        # from pprint import pprint
+        # pprint(self.distribution_dict)
 
 ########## Control functions ##########
 
@@ -805,10 +846,12 @@ def generate_marker(marker_publisher, robot_name, v, pose, frame_id, goal=False)
     if goal:
         marker.pose.position.x = pose[0]
         marker.pose.position.y = pose[1]
-        marker.text = 'G{}'.format(robot_name[-1])
+        marker.text = 'G{} {}'.format(robot_name[-1], v)
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.5
+        if v:
+            marker.color.r = 1.0
     else:
         marker.text = 'R{}: {}'.format(robot_name[-1], v)
         # marker.text = 'R{}: {}'.format(robot_name[-1], pose.pose.position)
